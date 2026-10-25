@@ -12,7 +12,7 @@ internal data class BeamSegment(val from: Float, val to: Float, val level: Int)
 internal data class PlacedMeasure(
     val track: Track, val measure: Measure, val x: Float, val y: Float,
     val beats: List<PlacedBeat>, val width: Float, val beamY: Float,
-    val beams: List<BeamSegment>, val targets: List<NoteTarget>, val startsSystem: Boolean = false,
+    val beams: List<BeamSegment>, val targets: List<NoteTarget>, val startsSystem: Boolean = false, val tabOffset: Float = 110f,
 )
 internal data class ScoreLayout(
     val rows: List<List<PlacedMeasure>>, val width: Float, val height: Float, val rowHeight: Float,
@@ -77,20 +77,34 @@ internal fun layoutScore(data: ScoreData, style: ScoreStyle, viewportWidth: Floa
     }
     val wrapping = style.layoutMode == ScoreLayoutMode.Vertical && viewportWidth.isFinite()
     val available = (viewportWidth - 64f).coerceAtLeast(140f)
-    val actualWidths = if (wrapping) widths.map { it.coerceAtMost(available) } else widths
+    val actualWidths = (if (wrapping) widths.map { it.coerceAtMost(available) } else widths).toMutableList()
     var columnX = 32f
     var system = 0
     val slots = actualWidths.map { width ->
         if (wrapping && columnX > 32f && columnX + width > viewportWidth - 32f) { columnX = 32f; system++ }
         (columnX to system).also { columnX += width }
-    }
+    }.toMutableList()
     val systemCount = if (count == 0) 0 else system + 1
-    val rowHeight = max(style.trackSpacing, (if (style.showStaff) 110f else 0f) +
-        (data.tracks.maxOfOrNull { it.tuning.size } ?: 6) * style.lineSpacing + 80f)
+    if (wrapping && style.justifySystems) (0 until systemCount).forEach { systemIndex ->
+        if (systemIndex < systemCount - 1 || style.justifyLastSystem) {
+            val indices = slots.indices.filter { slots[it].second == systemIndex }
+            val extra = ((viewportWidth - 64f - indices.sumOf { actualWidths[it].toDouble() }.toFloat()) / indices.size.coerceAtLeast(1)).coerceAtLeast(0f)
+            var x = 32f
+            indices.forEach { index -> actualWidths[index] += extra; slots[index] = x to systemIndex; x += actualWidths[index] }
+        }
+    }
+    val tabOffsets = data.tracks.associate { track ->
+        val lowest = track.measures.flatMap { it.beats }.flatMap { it.notes }.minOfOrNull { it.staffStep } ?: 0
+        track.id to if (style.showStaff) maxOf(110f, 4 * style.lineSpacing - lowest * style.lineSpacing / 2 + 30f) else 0f
+    }
+    val rowHeight = max(style.trackSpacing, data.tracks.maxOfOrNull { track ->
+        tabOffsets.getValue(track.id) + track.tuning.size * style.lineSpacing + 80f
+    } ?: 270f)
     val rows = (0 until systemCount).flatMap { systemIndex -> data.tracks.mapIndexed { trackIndex, track ->
         track.measures.mapIndexedNotNull { index, measure ->
             if (slots[index].second != systemIndex) return@mapIndexedNotNull null
             val targets = mutableListOf<NoteTarget>()
+            val tabOffset = tabOffsets.getValue(track.id)
             val x = slots[index].first
             val width = actualWidths[index]
             val y = 70f + (systemIndex * data.tracks.size + trackIndex) * rowHeight
@@ -114,7 +128,7 @@ internal fun layoutScore(data: ScoreData, style: ScoreStyle, viewportWidth: Floa
                             ScoreEvent.NoteSelected(track.id, measure.id, beat.id, note.id, tab))
                     }
                     if (style.showStaff) target(y + 4 * style.lineSpacing - note.staffStep * style.lineSpacing / 2, false)
-                    if (style.showTab) target(y + (if (style.showStaff) 110f else 0f) + (note.string - 1) * style.lineSpacing, true)
+                    if (style.showTab) target(y + tabOffset + (note.string - 1) * style.lineSpacing, true)
                     if (style.showTab && !style.showStaff && style.showTabRhythm)
                         target(y + (track.tuning.size - 1) * style.lineSpacing + 50f, true)
                 }
@@ -122,7 +136,7 @@ internal fun layoutScore(data: ScoreData, style: ScoreStyle, viewportWidth: Floa
             }.sortedBy { it.onset }
             val highest = measure.beats.flatMap { it.notes }.maxOfOrNull { it.staffStep } ?: 0
             val beamY = minOf(y - 12, y + 4 * style.lineSpacing - highest * style.lineSpacing / 2 - 28)
-            PlacedMeasure(track, measure, x, y, beats, width, beamY, beamSegments(beats, measure.time), targets, x == 32f)
+            PlacedMeasure(track, measure, x, y, beats, width, beamY, beamSegments(beats, measure.time), targets, x == 32f, tabOffset)
         }
     } }
     val contentWidth = rows.maxOfOrNull { row -> row.maxOfOrNull { it.x + it.width + 32f } ?: 64f } ?: 64f

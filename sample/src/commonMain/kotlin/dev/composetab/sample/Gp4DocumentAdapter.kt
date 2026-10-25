@@ -16,7 +16,9 @@ object Gp4DocumentAdapter : ScoreAdapter<String> {
         val root = Json.parseToJsonElement(source).jsonObject
         require(root.getValue("schemaVersion").jsonPrimitive.int == 1) { "Unsupported decoder schema" }
         val tracks = root.getValue("tracks").jsonArray.map { it.jsonObject }.filter { !it.getValue("percussion").jsonPrimitive.boolean }.map { t ->
-            Track(t.text("id"), t.text("name"), t.getValue("tuning").jsonArray.map { it.jsonPrimitive.int }, t.getValue("measures").jsonArray.map { entry ->
+            val tuning = t.getValue("tuning").jsonArray.map { it.jsonPrimitive.int }
+            val clef = if (tuning.size >= 6) Clef.Treble8vb else if (tuning.max() < 64) Clef.Bass else Clef.Treble
+            Track(t.text("id"), t.text("name"), tuning, t.getValue("measures").jsonArray.map { entry ->
                 val m = entry.jsonObject
                 Measure(m.text("id"), m.getValue("number").jsonPrimitive.int,
                     TimeSignature(m.getValue("numerator").jsonPrimitive.int, m.getValue("denominator").jsonPrimitive.int),
@@ -29,10 +31,11 @@ object Gp4DocumentAdapter : ScoreAdapter<String> {
                             notes = b.getValue("notes").jsonArray.map { noteEntry ->
                                 val n = noteEntry.jsonObject
                                 val midi = n.getValue("midi").jsonPrimitive.int
-                                val pitchClass = midi % 12
+                                val writtenMidi = midi + if (clef == Clef.Treble8vb) 12 else 0
+                                val pitchClass = writtenMidi % 12
                                 val steps = listOf(0, 0, 1, 1, 2, 3, 3, 4, 4, 5, 5, 6)
                                 Note(n.text("id"), midi, n.getValue("string").jsonPrimitive.int, n.getValue("fret").jsonPrimitive.int,
-                                    (midi / 12 - 5) * 7 + steps[pitchClass] - 2,
+                                    (writtenMidi / 12 - 1) * 7 + steps[pitchClass] - if (clef == Clef.Bass) 18 else 30,
                                     if (pitchClass in setOf(1, 3, 6, 8, 10)) Accidental.Sharp else null,
                                     n.getValue("effects").jsonArray.mapNotNull { effectEntry ->
                                         val effect = effectEntry.jsonObject
@@ -47,7 +50,7 @@ object Gp4DocumentAdapter : ScoreAdapter<String> {
                     }, repeatStart = m.getValue("repeatStart").jsonPrimitive.boolean,
                     repeatEnd = m.getValue("repeatEnd").jsonPrimitive.boolean,
                     lengthQuarters = m.getValue("length").jsonPrimitive.double)
-            })
+            }, clef = clef)
         }
         require(tracks.isNotEmpty()) { "The GP4 file has no pitched tracks to display" }
         val validTracks = tracks.map { it.id }.toSet()

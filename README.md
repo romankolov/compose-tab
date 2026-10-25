@@ -24,7 +24,7 @@ val state = rememberScoreState(document)
 VerticalScore(state, Modifier.fillMaxSize())
 ```
 
-`staffStep` is diatonic distance above the bottom treble E4 line; MIDI alone does
+`staffStep` is diatonic distance above the bottom E4 (treble) or G2 (bass) line; MIDI alone does
 not determine enharmonic spelling. Tuning lists use one-based string order
 (high E first for standard guitar). An empty note list is a rest; a beat's notes
 sound together. Values/lists must be treated as immutable.
@@ -232,7 +232,7 @@ scores off the UI thread and profile very large documents. Static bitmap tile
 caching is an optional optimization, not an implemented or mandatory cache.
 
 This is a usable interactive score/tab UI, **not a notation-complete publication
-engraver**. Known engraving limits include upward stems, treble clef only, no key
+engraver**. Known engraving limits include upward stems, no key
 signatures, full tuplet brackets, slur/tie engraving, printing/pagination, or
 collision resolution for dense chords/voices. Exact timing is preserved even when
 an articulation/engraving is simplified. GP4 decode warnings surface simplified
@@ -258,3 +258,5 @@ under LGPL-3.0 and mido under MIT. See [third-party notices](THIRD_PARTY_NOTICES
 The verified-preview shipping workflow in `.github/workflows/release-preview.yml`
 accepts a successful build run from the same branch and attaches **those exact
 artifacts** to a preview tag. It does not merge the PR or publish to mobile stores.
+
+Clefs: `Track.clef` supports treble, octave-transposing guitar treble (`Treble8vb`), and bass. Set `staffStep` from written pitch for transposing clefs; sounding MIDI is unchanged. The sample maps guitar to written octave-up treble and low four-string instruments to bass, and layout leaves extra room for low ledger lines before tablature.

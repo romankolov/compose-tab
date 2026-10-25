@@ -79,6 +79,9 @@ class ScoreLayoutTest {
         val marks = measureHighlights(measure, state.selectedNoteIds, state.playback, style)
         assertTrue(marks.any { it.kind == HighlightKind.Selection && it.style.shape == HighlightShape.Rectangle })
         assertEquals(1, marks.count { it.kind == HighlightKind.Playhead })
+        state.setPlayhead("b", .5f)
+        state.setPlayingNotes("n")
+        assertEquals(.5f, state.playback?.positions?.single()?.fraction)
         state.clearPlayback()
         assertEquals(setOf("n"), state.selectedNoteIds)
     }

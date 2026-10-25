@@ -24,7 +24,7 @@ class DesktopSampleServices(private val input: String? = null) : SampleServices 
 
     @OptIn(ExperimentalResourceApi::class)
     override suspend fun initialSong(): SampleSong {
-        val supplied = input?.let(::File) ?: File("sample/local/nothing-else-matters.gp4").takeIf { it.isFile }
+        val supplied = input?.let(::File) ?: listOf(File("sample/local/nothing-else-matters.gp4"), File("local/nothing-else-matters.gp4")).firstOrNull { it.isFile }
         if (supplied != null) return decode(supplied)
         val temporary = withContext(Dispatchers.IO) { File.createTempFile("compose-tab-study", ".gp4") }
         return try {

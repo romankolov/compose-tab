@@ -13,8 +13,10 @@ data class ScoreData(val title: String, val composer: String = "", val tracks: L
 }
 data class Track(
     val id: String, val name: String, val tuning: List<Int> = listOf(64, 59, 55, 50, 45, 40),
-    val measures: List<Measure>,
+    val measures: List<Measure>, val clef: Clef = Clef.Treble,
 ) { init { require(tuning.isNotEmpty()); require(tuning.all { it in 0..127 }) } }
+enum class Clef { Treble, Treble8vb, Bass }
+
 data class TimeSignature(val numerator: Int = 4, val denominator: Int = 4) {
     init { require(numerator > 0); require(denominator in listOf(1, 2, 4, 8, 16, 32)) }
 }
@@ -45,7 +47,8 @@ data class Beat(
     val durationQuarters: Float get() = duration.quarters * (if (dotted) 1.5f else 1f) * durationScale.toFloat()
 }
 enum class Accidental { Natural, Sharp, Flat }
-/** staffStep: diatonic offset from treble staff's bottom E4 line (0), not a MIDI offset.
+/** staffStep: diatonic offset from the clef's bottom line (treble E4, bass G2).
+ * Treble8vb uses written pitch (one octave above sounding MIDI), not sounding pitch.
  * Explicit spelling keeps enharmonic and key-signature decisions in the mapping layer. */
 data class Note(
     val id: String, val midi: Int, val string: Int, val fret: Int,

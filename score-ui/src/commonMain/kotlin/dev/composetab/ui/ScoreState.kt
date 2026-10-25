@@ -64,7 +64,7 @@ class ScoreState(initialData: ScoreData) {
     /** Host clock drives this; the library never starts a timer or audio engine. */
     fun setPlaybackPosition(value: ScorePlaybackPosition?) { playback = value }
     fun setPlaybackQuarter(quarter: Double) { playback = document.timeline.at(quarter) }
-    fun setPlayingNotes(vararg ids: String) { playback = ScorePlaybackPosition(noteIds = ids.toSet()) }
+    fun setPlayingNotes(vararg ids: String) { playback = ScorePlaybackPosition(playback?.positions.orEmpty(), ids.toSet()) }
     fun setPlayhead(beatId: String, fraction: Float = 0f) { playback = ScorePlaybackPosition(listOf(ScorePosition(beatId, fraction)), playback?.noteIds.orEmpty()) }
     fun clearPlayback() { playback = null }
     fun revealNote(noteId: String) { revealRequest = noteId }
@@ -104,6 +104,8 @@ data class ScoreStyle(
     val showTab: Boolean = true,
     val showTabRhythm: Boolean = true,
     val layoutMode: ScoreLayoutMode = ScoreLayoutMode.Horizontal,
+    val justifySystems: Boolean = true,
+    val justifyLastSystem: Boolean = false,
     val selectedHighlight: ScoreHighlightStyle = ScoreHighlightStyle(color = selection),
     val playingHighlight: ScoreHighlightStyle = ScoreHighlightStyle(color = Color(0x6675B4D7)),
     val playhead: ScoreHighlightStyle = ScoreHighlightStyle(HighlightShape.VerticalLine, Color(0xFF2482B0)),

@@ -16,7 +16,7 @@ internal fun measureHighlights(
     placed: PlacedMeasure, selected: Set<String>, playback: ScorePlaybackPosition?, style: ScoreStyle,
 ): List<ScoreHighlight> = buildList {
     val bottom = placed.y + when {
-        style.showTab -> (if (style.showStaff) 110f else 0f) + (placed.track.tuning.size - 1) * style.lineSpacing +
+        style.showTab -> placed.tabOffset + (placed.track.tuning.size - 1) * style.lineSpacing +
             (if (!style.showStaff && style.showTabRhythm) 60f else 14f)
         else -> 4 * style.lineSpacing + 14f
     }

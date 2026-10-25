@@ -25,6 +25,7 @@ import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.platform.LocalDensity
 import dev.composetab.model.*
 import androidx.compose.ui.text.font.FontFamily
@@ -90,6 +91,7 @@ fun ScoreComposable(
         return true
     }
     Canvas(modifier
+        .clipToBounds()
         .onSizeChanged { viewport = it }
         .focusRequester(focus)
         .onKeyEvent { event ->
@@ -179,7 +181,7 @@ fun ScoreComposable(
             layout.visibleMeasures(scrollX, scrollY, scrollX + size.width / factor, scrollY + size.height / factor).forEach { placed ->
                 val (track, measure, x, y, beats) = placed
                 val gap = style.lineSpacing
-                val tabY = y + if (style.showStaff) 110f else 0f
+                val tabY = y + placed.tabOffset
                 val tabRhythm = style.showTab && !style.showStaff && style.showTabRhythm
                 val rhythmY = tabY + (track.tuning.size - 1) * gap + 50f
                 label("${measure.number}", x + 8, y - 27, 11f, true)
@@ -190,7 +192,8 @@ fun ScoreComposable(
                 }
                 if (style.showStaff) {
                     lines(y, 5)
-                    if (placed.startsSystem) music("\uE050", x - 24, y + 3 * gap, gap * 4)
+                    if (placed.startsSystem) music(when (track.clef) { Clef.Treble -> "\uE050"; Clef.Treble8vb -> "\uE052"; Clef.Bass -> "\uE062" },
+                        x - 24, y + if (track.clef == Clef.Bass) gap else 3 * gap, gap * 4)
                     label("${measure.time.numerator}", x + 14, y + 1, 17f)
                     label("${measure.time.denominator}", x + 14, y + 20, 17f)
                 }
