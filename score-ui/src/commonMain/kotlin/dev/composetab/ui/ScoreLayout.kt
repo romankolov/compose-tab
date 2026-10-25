@@ -12,7 +12,7 @@ internal data class BeamSegment(val from: Float, val to: Float, val level: Int)
 internal data class PlacedMeasure(
     val track: Track, val measure: Measure, val x: Float, val y: Float,
     val beats: List<PlacedBeat>, val width: Float, val beamY: Float,
-    val beams: List<BeamSegment>, val targets: List<NoteTarget>,
+    val beams: List<BeamSegment>, val targets: List<NoteTarget>, val startsSystem: Boolean = false,
 )
 internal data class ScoreLayout(
     val rows: List<List<PlacedMeasure>>, val width: Float, val height: Float, val rowHeight: Float,
@@ -68,27 +68,43 @@ internal fun beamSegments(beats: List<PlacedBeat>, time: TimeSignature): List<Be
 }
 
 /** Pure geometry in logical dp. Simultaneous tracks share measure column widths. */
-internal fun layoutScore(data: ScoreData, style: ScoreStyle): ScoreLayout {
+internal fun layoutScore(data: ScoreData, style: ScoreStyle, viewportWidth: Float = Float.POSITIVE_INFINITY): ScoreLayout {
     val count = data.tracks.maxOfOrNull { it.measures.size } ?: 0
     val widths = List(count) { index ->
         max(style.measureWidth, 80f + (data.tracks.maxOfOrNull { it.measures.getOrNull(index)?.beats?.size ?: 0 } ?: 0) * 40f)
     }
-    val offsets = widths.runningFold(32f) { sum, width -> sum + width }
+    val wrapping = style.layoutMode == ScoreLayoutMode.Vertical && viewportWidth.isFinite()
+    val available = (viewportWidth - 64f).coerceAtLeast(140f)
+    val actualWidths = if (wrapping) widths.map { it.coerceAtMost(available) } else widths
+    var columnX = 32f
+    var system = 0
+    val slots = actualWidths.map { width ->
+        if (wrapping && columnX > 32f && columnX + width > viewportWidth - 32f) { columnX = 32f; system++ }
+        (columnX to system).also { columnX += width }
+    }
+    val systemCount = if (count == 0) 0 else system + 1
     val rowHeight = max(style.trackSpacing, (if (style.showStaff) 110f else 0f) +
         (data.tracks.maxOfOrNull { it.tuning.size } ?: 6) * style.lineSpacing + 80f)
-    val rows = data.tracks.mapIndexed { trackIndex, track ->
-        track.measures.mapIndexed { index, measure ->
+    val rows = (0 until systemCount).flatMap { systemIndex -> data.tracks.mapIndexed { trackIndex, track ->
+        track.measures.mapIndexedNotNull { index, measure ->
+            if (slots[index].second != systemIndex) return@mapIndexedNotNull null
             val targets = mutableListOf<NoteTarget>()
-            val x = offsets[index]
-            val width = widths[index]
-            val y = 70f + trackIndex * rowHeight
-            val total = measure.beats.sumOf { it.durationQuarters.toDouble() }.toFloat().coerceAtLeast(1f)
+            val x = slots[index].first
+            val width = actualWidths[index]
+            val y = 70f + (systemIndex * data.tracks.size + trackIndex) * rowHeight
             var elapsed = 0f
-            val extraSpace = (width - 80f - measure.beats.size * 32f).coerceAtLeast(0f)
+            val onsets = measure.beats.map { beat ->
+                val start = beat.offsetQuarters?.toFloat() ?: elapsed
+                elapsed = maxOf(elapsed, start + beat.durationQuarters)
+                start
+            }
+            val total = maxOf(elapsed, measure.lengthQuarters?.toFloat() ?: 0f, 1f)
+            val distinctOnsets = onsets.distinct().sorted()
+            val spacing = minOf(32f, (width - 80f) / distinctOnsets.size.coerceAtLeast(1))
+            val extraSpace = (width - 80f - distinctOnsets.size * spacing).coerceAtLeast(0f)
             val beats = measure.beats.mapIndexed { beatIndex, beat ->
-                val bx = x + 54f + beatIndex * 32f + elapsed / total * extraSpace
-                val onset = elapsed
-                elapsed += beat.durationQuarters
+                val onset = onsets[beatIndex]
+                val bx = x + 54f + distinctOnsets.binarySearch(onset) * spacing + onset / total * extraSpace
                 beat.notes.forEach { note ->
                     require(note.string <= track.tuning.size) { "Note ${note.id} uses a string outside track tuning" }
                     fun target(ny: Float, tab: Boolean) {
@@ -104,8 +120,9 @@ internal fun layoutScore(data: ScoreData, style: ScoreStyle): ScoreLayout {
             }
             val highest = measure.beats.flatMap { it.notes }.maxOfOrNull { it.staffStep } ?: 0
             val beamY = minOf(y - 12, y + 4 * style.lineSpacing - highest * style.lineSpacing / 2 - 28)
-            PlacedMeasure(track, measure, x, y, beats, width, beamY, beamSegments(beats, measure.time), targets)
+            PlacedMeasure(track, measure, x, y, beats, width, beamY, beamSegments(beats, measure.time), targets, x == 32f)
         }
-    }
-    return ScoreLayout(rows, offsets.last() + 32f, 40f + data.tracks.size * rowHeight, rowHeight)
+    } }
+    val contentWidth = rows.maxOfOrNull { row -> row.maxOfOrNull { it.x + it.width + 32f } ?: 64f } ?: 64f
+    return ScoreLayout(rows, contentWidth, maxOf(80f, 40f + systemCount * data.tracks.size * rowHeight), rowHeight)
 }

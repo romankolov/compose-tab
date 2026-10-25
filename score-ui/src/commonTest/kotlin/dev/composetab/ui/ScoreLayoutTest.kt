@@ -52,4 +52,34 @@ class ScoreLayoutTest {
         state.zoomTo(Float.NaN); state.scrollTo(Float.POSITIVE_INFINITY)
         assertEquals(1f, state.zoom); assertEquals(0f, state.scroll)
     }
+    @Test fun verticalWrapsAndHorizontalDoesNot() {
+        val track = score().tracks.single()
+        val data = ScoreData("Wrap", tracks = listOf(track.copy(measures = List(6) { i ->
+            Measure("m$i", i + 1, beats = listOf(Beat("b$i", notes = listOf(Note("n$i", 64, 1, 0, 0)))))
+        })))
+        val horizontal = layoutScore(data, ScoreStyle(), 650f)
+        val vertical = layoutScore(data, ScoreStyle(layoutMode = ScoreLayoutMode.Vertical), 650f)
+        assertEquals(1, horizontal.rows.size)
+        assertEquals(3, vertical.rows.size)
+        assertTrue(vertical.width <= 650f)
+        assertTrue(vertical.measures.all { it.x + it.width <= 650f })
+        assertTrue(vertical.rows[1].first().y > vertical.rows[0].first().y)
+        val resized = layoutScore(data, ScoreStyle(layoutMode = ScoreLayoutMode.Vertical), 350f)
+        assertEquals(6, resized.rows.size)
+        assertEquals("n3", resized.hitTest(resized.targets.first { it.event.noteId == "n3" }.bounds.center)?.event?.noteId)
+    }
+    @Test fun pointersAndSelectionHaveIndependentStyles() {
+        val state = ScoreState(score())
+        state.selectNotes("n")
+        state.setPlaybackQuarter(.25)
+        assertEquals(setOf("n"), state.playback?.noteIds)
+        val style = ScoreStyle(selectedHighlight = ScoreHighlightStyle(HighlightShape.Rectangle),
+            playhead = ScoreHighlightStyle(HighlightShape.VerticalLine))
+        val measure = layoutScore(score(), style).measures.single()
+        val marks = measureHighlights(measure, state.selectedNoteIds, state.playback, style)
+        assertTrue(marks.any { it.kind == HighlightKind.Selection && it.style.shape == HighlightShape.Rectangle })
+        assertEquals(1, marks.count { it.kind == HighlightKind.Playhead })
+        state.clearPlayback()
+        assertEquals(setOf("n"), state.selectedNoteIds)
+    }
 }

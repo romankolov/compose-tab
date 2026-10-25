@@ -21,17 +21,27 @@ data class TimeSignature(val numerator: Int = 4, val denominator: Int = 4) {
 data class Measure(
     val id: String, val number: Int, val time: TimeSignature = TimeSignature(),
     val beats: List<Beat>, val repeatStart: Boolean = false, val repeatEnd: Boolean = false,
-)
+    val lengthQuarters: Double? = null,
+) {
+    init { require(lengthQuarters == null || (lengthQuarters.isFinite() && lengthQuarters > 0)) }
+}
 enum class Duration(val quarters: Float) {
     Whole(4f), Half(2f), Quarter(1f), Eighth(.5f), Sixteenth(.25f), ThirtySecond(.125f)
 }
 data class Beat(
     val id: String, val duration: Duration = Duration.Quarter, val dotted: Boolean = false,
     val notes: List<Note> = emptyList(),
+    /** Explicit decoder timing supports tuplets and simultaneous voices without rounding. */
+    val offsetQuarters: Double? = null,
+    val durationScale: Double = 1.0,
+
 ) {
-    init { require(notes.map { it.string }.distinct().size == notes.size) { "A beat cannot contain two frets on the same string" } }
+    init {
+        require(offsetQuarters == null || (offsetQuarters.isFinite() && offsetQuarters >= 0))
+        require(durationScale.isFinite() && durationScale > 0)
+        require(notes.map { it.string }.distinct().size == notes.size) { "A beat cannot contain two frets on the same string" } }
     val isRest: Boolean get() = notes.isEmpty()
-    val durationQuarters: Float get() = duration.quarters * if (dotted) 1.5f else 1f
+    val durationQuarters: Float get() = duration.quarters * (if (dotted) 1.5f else 1f) * durationScale.toFloat()
 }
 enum class Accidental { Natural, Sharp, Flat }
 /** staffStep: diatonic offset from treble staff's bottom E4 line (0), not a MIDI offset.

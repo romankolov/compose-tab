@@ -23,6 +23,9 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import dev.composetab.model.*
 import androidx.compose.ui.text.font.FontFamily
 import org.jetbrains.compose.resources.Font
@@ -39,13 +42,38 @@ fun ScoreComposable(
     style: ScoreStyle = ScoreStyle(),
     onEvent: (ScoreEvent) -> Unit = {},
     onDrawEffect: (DrawScope.(Effect, Offset, ScoreStyle) -> Unit)? = null,
+    onDrawHighlight: (DrawScope.(ScoreHighlight) -> Unit)? = null,
 ) {
-    val layout = remember(state.data, style) { layoutScore(state.data, style) }
+    var viewport by remember { mutableStateOf(IntSize.Zero) }
+    val density = LocalDensity.current.density
+    val logicalWidth = if (viewport.width == 0) Float.POSITIVE_INFINITY else viewport.width / (density * state.zoom)
+    val layout = remember(state.data, style, logicalWidth) { layoutScore(state.data, style, logicalWidth) }
     val zoom by animateFloatAsState(state.zoom, spring(stiffness = 500f), label = "score zoom")
     val text = rememberTextMeasurer(cacheSize = 256)
     val musicFamily = FontFamily(Font(Res.font.bravura))
     val currentEvent by rememberUpdatedState(onEvent)
     val focus = remember { FocusRequester() }
+    val beatLocations = remember(layout) { layout.measures.flatMap { m -> m.beats.map { it.beat.id to Offset(it.x, m.y) } }.toMap() }
+    val noteLocations = remember(layout) { layout.targets.associate { it.event.noteId to it.bounds.center } }
+    LaunchedEffect(layout, viewport, state.zoom, state.revealRequest, state.playback, state.followPlayback) {
+        if (viewport.width == 0 || viewport.height == 0) return@LaunchedEffect
+        val width = viewport.width / (density * state.zoom)
+        val height = viewport.height / (density * state.zoom)
+        val request = state.revealRequest
+        val activeBeat = state.playback?.positions?.firstOrNull { it.beatId in beatLocations }?.beatId
+        val target = if (request != null) noteLocations[request] ?: beatLocations[request]
+            else if (state.followPlayback) activeBeat?.let { beatLocations[it] }
+                ?: state.playback?.noteIds?.firstNotNullOfOrNull { noteLocations[it] } else null
+        if (target != null) {
+            if (request != null || target.x < state.scroll + 24 || target.x > state.scroll + width - 48)
+                state.scrollTo(target.x - width * .2f)
+            if (request != null || target.y < state.verticalScroll + 24 || target.y + layout.rowHeight > state.verticalScroll + height)
+                state.scrollVerticallyTo(target.y - 56)
+        }
+        state.scrollTo(state.scroll.coerceAtMost((layout.width - width).coerceAtLeast(0f)))
+        state.scrollVerticallyTo(state.verticalScroll.coerceAtMost((layout.height - height).coerceAtLeast(0f)))
+        if (request != null) state.revealRequest = null
+    }
     fun viewportEvent() = currentEvent(ScoreEvent.ViewportChanged(state.zoom, state.scroll, state.verticalScroll))
     fun navigate(forward: Boolean): Boolean {
         val targets = layout.targets.filter { it.event.tablature == style.showTab }.distinctBy { it.event.noteId }
@@ -62,6 +90,7 @@ fun ScoreComposable(
         return true
     }
     Canvas(modifier
+        .onSizeChanged { viewport = it }
         .focusRequester(focus)
         .onKeyEvent { event ->
             if (event.type != KeyEventType.KeyDown) false else when (event.key) {
@@ -89,11 +118,12 @@ fun ScoreComposable(
                 while (true) {
                     val event = awaitPointerEvent()
                     if (event.type == PointerEventType.Scroll) {
+                        state.followPlayback = false
                         val delta = event.changes.fold(Offset.Zero) { acc, change -> acc + change.scrollDelta }
                         val maxX = (layout.width - size.width / (density * state.zoom)).coerceAtLeast(0f)
                         val maxY = (layout.height - size.height / (density * state.zoom)).coerceAtLeast(0f)
                         if (event.keyboardModifiers.isPointerCtrlPressed) state.zoomTo(state.zoom - delta.y * .08f)
-                        else if (layout.rows.size <= 1 && maxX > 0f) state.scrollTo((state.scroll + (delta.x + delta.y) * 32 / state.zoom).coerceIn(0f, maxX))
+                        else if (style.layoutMode == ScoreLayoutMode.Horizontal && layout.rows.size <= 1 && maxX > 0f) state.scrollTo((state.scroll + (delta.x + delta.y) * 32 / state.zoom).coerceIn(0f, maxX))
                         else {
                             state.scrollTo((state.scroll + delta.x * 32 / state.zoom).coerceIn(0f, maxX))
                             state.scrollVerticallyTo((state.verticalScroll + delta.y * 32 / state.zoom).coerceIn(0f, maxY))
@@ -118,6 +148,7 @@ fun ScoreComposable(
         }
         .pointerInput(state, layout) {
             detectTransformGestures { centroid, pan, gestureZoom, _ ->
+                state.followPlayback = false
                 val oldZoom = state.zoom
                 state.zoomTo(oldZoom * gestureZoom)
                 // Keep the pinch anchor stationary while scaling.
@@ -152,14 +183,14 @@ fun ScoreComposable(
                 val tabRhythm = style.showTab && !style.showStaff && style.showTabRhythm
                 val rhythmY = tabY + (track.tuning.size - 1) * gap + 50f
                 label("${measure.number}", x + 8, y - 27, 11f, true)
-                if (measure == track.measures.firstOrNull()) label(track.name, x, y - 48, 12f, true)
+                if (placed.startsSystem) label(track.name, x, y - 48, 12f, true)
                 fun lines(top: Float, count: Int) {
                     repeat(count) { i -> drawLine(style.muted.copy(alpha = .55f), Offset(x, top + i * gap), Offset(x + placed.width, top + i * gap), .7f) }
                     drawLine(style.ink, Offset(x + placed.width, top), Offset(x + placed.width, top + (count - 1) * gap), 1f)
                 }
                 if (style.showStaff) {
                     lines(y, 5)
-                    if (measure == track.measures.firstOrNull()) music("\uE050", x - 24, y + 3 * gap, gap * 4)
+                    if (placed.startsSystem) music("\uE050", x - 24, y + 3 * gap, gap * 4)
                     label("${measure.time.numerator}", x + 14, y + 1, 17f)
                     label("${measure.time.denominator}", x + 14, y + 20, 17f)
                 }
@@ -169,6 +200,14 @@ fun ScoreComposable(
                     val top = if (style.showStaff) y else tabY
                     drawLine(style.ink, Offset(rx, top), Offset(rx, top + 4 * gap), 2.5f)
                     repeat(2) { drawCircle(style.ink, 1.8f, Offset(rx + if (measure.repeatStart) 6 else -6, top + (1.5f + it) * gap)) }
+                }
+                // Erase tab line segments first; highlights then remain visible behind fret text.
+                if (style.showTab) beats.forEach { placedBeat -> placedBeat.beat.notes.forEach { note ->
+                    val ty = tabY + (note.string - 1) * gap
+                    drawRect(style.paper, Offset(placedBeat.x - 8, ty - 7), Size(16f, 14f))
+                } }
+                measureHighlights(placed, state.selectedNoteIds, state.playback, style).forEach { highlight ->
+                    if (onDrawHighlight != null) onDrawHighlight.invoke(this, highlight) else drawScoreHighlight(highlight)
                 }
                 beats.forEachIndexed { index, (beat, bx) ->
                     if (beat.isRest) {
@@ -186,9 +225,6 @@ fun ScoreComposable(
                     beat.notes.forEach { note ->
                         val ny = y + 4 * gap - note.staffStep * gap / 2
                         val ty = tabY + (note.string - 1) * gap
-                        if (note.id == state.selectedNoteId) {
-                            if (style.showStaff) drawCircle(style.selection, 13f, Offset(bx, ny))
-                        }
                         if (style.showStaff) {
                             // Ledger lines on every second staff step outside the five-line staff.
                             if (note.staffStep < 0) for (step in -2 downTo note.staffStep step 2) drawLine(style.ink, Offset(bx - 9, y + 4 * gap - step * gap / 2), Offset(bx + 9, y + 4 * gap - step * gap / 2), .8f)
@@ -198,8 +234,6 @@ fun ScoreComposable(
                             if (beat.dotted) drawCircle(style.ink, 1.6f, Offset(bx + 10, ny - 2))
                         }
                         if (style.showTab) {
-                            drawRect(style.paper, Offset(bx - 8, ty - 7), Size(16f, 14f))
-                            if (note.id == state.selectedNoteId) drawRoundRect(style.selection, Offset(bx - 12, ty - 10), Size(24f, 20f))
                             label(note.fret.toString(), bx - if (note.fret >= 10) 7f else 3.5f, ty - 8, 13f)
                         }
                         val effectY = if (style.showTab) tabY - 16 else y - 27
@@ -226,7 +260,6 @@ fun ScoreComposable(
                         }
                     }
                     if (tabRhythm && beat.notes.isNotEmpty()) {
-                        if (beat.notes.any { it.id == state.selectedNoteId }) drawCircle(style.selection, 11f, Offset(bx, rhythmY))
                         drawOval(style.ink, Offset(bx - 4, rhythmY - 3), Size(8f, 6f),
                             style = if (beat.duration in listOf(Duration.Whole, Duration.Half)) Stroke(1.3f) else Fill)
                         if (beat.duration != Duration.Whole) drawLine(style.ink, Offset(bx + 4, rhythmY), Offset(bx + 4, rhythmY - 28), 1.2f)
