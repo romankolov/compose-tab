@@ -1,0 +1,83 @@
+name: Ship verified preview
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: Successful Build, test and capture run ID from this branch
+        required: true
+      tag:
+        description: New prerelease tag
+        required: true
+        default: v0.2.0-preview.1
+permissions:
+  contents: write
+  actions: read
+jobs:
+  release:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Require a successful build of this branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ inputs.run_id }}
+        run: |
+          gh run view "$RUN_ID" --json headSha,headBranch,status,conclusion,workflowName > verified-run.json
+          python3 - <<'PY'
+          import json, os
+          run = json.load(open('verified-run.json'))
+          assert run['status'] == 'completed' and run['conclusion'] == 'success', 'Build must be green'
+          assert run['workflowName'] == 'Build, test and capture', 'Expected build workflow'
+          assert run['headBranch'] == os.environ['GITHUB_REF_NAME'], 'Expected this branch'
+          with open(os.environ['GITHUB_ENV'], 'a') as output:
+              output.write('SOURCE_SHA=' + run['headSha'] + '\n')
+          PY
+          SHA=$(python3 -c "import json; print(json.load(open('verified-run.json'))['headSha'])")
+          git merge-base --is-ancestor "$SHA" HEAD
+      - uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          run-id: ${{ inputs.run_id }}
+          path: artifacts
+      - name: Package and publish the verified build
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.tag }}
+          RUN_ID: ${{ inputs.run_id }}
+        run: |
+          mkdir release
+          cp artifacts/linux-desktop-app/*.tar.gz release/
+          cp artifacts/android-debug/*.apk release/ComposeTabStudio-0.2.0-debug.apk
+          cp artifacts/desktop-screenshots/*.png release/
+          (cd artifacts/ios-simulator-framework && zip -qr ../../release/ComposeTabSample-ios-simulator-arm64.zip .)
+          cat > release-notes.md <<EOF_NOTES
+          ## Compose Tab 0.2.0 — advanced preview
+
+          UI-only Kotlin Multiplatform score/tab library, plus a runnable sample studio.
+          Includes adaptive layout, meter-aware beams, Bravura notation glyphs, tab rhythm,
+          guitar effects, selection events, keyboard/wheel/pinch navigation, and custom styling.
+
+          **Verified build:** https://github.com/$GITHUB_REPOSITORY/actions/runs/$RUN_ID
+          **Source revision:** $SOURCE_SHA
+
+          - Android debug APK assembled (debug-signed, not a store release).
+          - Linux x64 app packaged **and launched**, with its Java runtime included.
+          - Model/layout and actual Compose pointer/keyboard tests passed.
+          - iOS arm64 simulator framework linked on macOS; a Swift host is required.
+          - Screenshots below are real Desktop window captures from the same build.
+
+          Extract the Linux artifact ZIP (if using Actions), then the tarball, and run
+          ComposeTabStudio/bin/ComposeTabStudio in a Linux graphical session.
+          Android/iOS physical-device UI testing is not claimed. No Maven Central release.
+
+          This is not a notation-complete stable engraver: key signatures, tuplets,
+          multi-voice timing, ties, wrapping/printing and collision resolution remain future work.
+          No real GP5 decoder or audio playback is bundled.
+
+          ![Notation and tab](https://github.com/$GITHUB_REPOSITORY/releases/download/$RELEASE_TAG/both.png)
+          ![Tab rhythm](https://github.com/$GITHUB_REPOSITORY/releases/download/$RELEASE_TAG/tab.png)
+          ![Selected note](https://github.com/$GITHUB_REPOSITORY/releases/download/$RELEASE_TAG/selected.png)
+          EOF_NOTES
+          gh release create "$RELEASE_TAG" release/* --target "$SOURCE_SHA" --prerelease --title "Compose Tab 0.2.0 · Advanced Preview" --notes-file release-notes.md

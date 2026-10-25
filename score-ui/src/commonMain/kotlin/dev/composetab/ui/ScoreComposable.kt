@@ -179,7 +179,7 @@ fun ScoreComposable(
                                 Duration.Sixteenth -> "\uE4E7"; Duration.ThirtySecond -> "\uE4E8"
                             }
                             music(rest, bx - 5, if (tabRhythm) rhythmY else y + 2 * gap, gap * 4)
-                            if (beat.dotted) drawCircle(style.ink, 1.6f, Offset(bx + 10, y + 1.5f * gap))
+                            if (beat.dotted) drawCircle(style.ink, 1.6f, Offset(bx + 10, if (tabRhythm) rhythmY - 2 else y + 1.5f * gap))
                         }
                         if (style.showTab) label("–", bx - 4, tabY + 16, 13f, true)
                     }

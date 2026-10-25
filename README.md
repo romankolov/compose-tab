@@ -139,3 +139,7 @@ For an app in this repository use `implementation(project(":score-ui"))`. A sepa
 From a successful [Actions run](https://github.com/romankolov/compose-tab/actions/workflows/build.yml), download `linux-desktop-app`, extract the artifact ZIP and then `ComposeTabStudio-linux-x64.tar.gz`, and run `ComposeTabStudio/bin/ComposeTabStudio`. It includes its own Java runtime; it needs a Linux graphical session and the normal system graphics libraries. Install the `android-debug` APK using `adb install -r sample-debug.apk` (debug-signed, not a store release). The `ios-simulator-framework` artifact is for an arm64 simulator host, not a standalone installable iOS application.
 
 To package locally: `./gradlew :sample:createDistributable`. To recreate an individual screenshot: `./gradlew :sample:run --args="--screenshot=/absolute/path/capture.png --view=selected"` (views: `both`, `tab`, `selected`).
+
+### Shipping a verified preview
+
+`Ship verified preview` is a manual GitHub workflow. Supply a **successful build run ID from this branch** and a new preview tag. It verifies the run, downloads the already-tested artifacts (rather than rebuilding different binaries), and creates a prerelease attached to that exact source revision. It does not merge the PR, switch branches, upload to Maven Central, or publish to mobile stores.
