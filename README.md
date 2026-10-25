@@ -3,7 +3,7 @@
 A UI-only Compose Multiplatform library for interactive music scores and guitar
  tablature on **Android, iOS and Desktop**. The library has **no decoder, player,
  audio device, file I/O or playback clock**. The separate sample demonstrates
-real GP4 decoding and a Desktop General MIDI player.
+TuxGuitar Java GP1–GP5 decoding and Android/Desktop General MIDI players.
 
 ## Start with your decoder
 
@@ -144,77 +144,82 @@ globally unique. Selection state can hold multiple note IDs, while default point
 clicks select one. Replacement documents prune removed selections and reset the
 playback snapshot; the host should resend its current position after an edit.
 
-## Run the real GP4 / playback sample
+## Run the Guitar Pro / playback sample
 
-Prerequisites: JDK 17, Android SDK 35 for this build's Android targets; macOS/Xcode
-for iOS. **Desktop GP4 import additionally needs Python 3.10+** with the two pinned
-sample dependencies. They are intentionally outside the library and Java runtime:
+Prerequisites: JDK 17, Android SDK 35 for Android targets; macOS/Xcode for iOS.
+**No Python installation or external decoder is required by the apps.**
 
 ```sh
-python3 -m venv .venv
-.venv/bin/python -m pip install -r sample/tools/requirements.txt
-COMPOSE_TAB_PYTHON="$PWD/.venv/bin/python" ./gradlew :sample:run
+./gradlew :sample:run                 # Desktop
+./gradlew :sample:assembleDebug       # Android APK
 ```
 
-Windows: use `.venv\Scripts\python.exe` and set `COMPOSE_TAB_PYTHON` accordingly.
-For a packaged Desktop app, set this variable to the **absolute** interpreter path.
-It must have `PyGuitarPro==0.11` and `mido==1.3.3` installed. The Python bridge
-has a file-size limit, a decoder process timeout, explicit schema validation and
-error reporting. It is a real GP4 parser, not an extension/header-only fake.
-
-- **Open GP4** imports a local file using the real parser.
+- **Load GP file** opens a Desktop chooser or Android's Storage Access Framework
+  picker. The sample decodes classic **GP1–GP5** (`.gtp`, `.gp3`, `.gp4`, `.gp5`)
+  with the actual Java readers from TuxGuitar, off the UI thread. GPX/GP6–8 are
+  explicitly rejected. Input is bounded to 16 MiB; errors do not replace the score.
 - **Load requested tab** retrieves the supplied
-  [Nothing Else Matters GP4](https://gprotab.net/en/tabs/metallica/nothing-else-matters?download),
-  decodes it off the UI thread, and displays its pitched tracks. If the source host
-  blocks a download, save that link in your browser and use **Open GP4**.
-- Play/Pause/Stop and scrubbing use Java MIDI's actual sequencer tick position,
-  including embedded tempo changes. The generated MIDI expands repeat/alternate
-  ending passes; those passes reference original notated IDs for the UI.
-- Choose a track, layout, highlight styles and follow mode in the toolbar.
-- Audio uses the operating system's General MIDI synthesizer. When there is no
-  audio device (e.g. CI), the UI explicitly says **silent cursor preview**. No
-  sound output is claimed in that case. Guitar articulations are simplified in
-  playback; this is not a physical guitar synthesizer.
+  [Nothing Else Matters GP4](https://gprotab.net/en/tabs/metallica/nothing-else-matters?download).
+  If the host blocks downloads, save the link and use **Load GP file**.
+- The same Java MIDI exporter expands repeats/alternate endings and embedded
+  tempo changes. The Kotlin adapter uses TuxGuitar's matching repeat controller
+  to map those passes back to stable notated beat/note IDs.
+- **Desktop** uses JavaSound's sequencer tick position and General MIDI synth.
+  CI runs with explicit **silent cursor preview** when audio is disabled.
+- **Android** uses native `MediaPlayer` SMF/General MIDI playback. Its actual
+  `currentPosition` is converted through the exported MIDI's tempo map to drive
+  the cursor. Play/Pause/Stop, seek-slider and note-click seeking are available.
+  Audio focus loss and leaving the activity pause playback; destruction releases
+  the player and removes cached MIDI. No storage permission is needed. Playback
+  is foreground-only, not a background media service. Devices missing a MIDI
+  codec show an audio-unavailable message, not a fake playing clock.
+- Choose track, layout, highlight styles and cursor follow in the toolbar.
+  The sample is not a physical guitar synthesizer or full GP articulation editor.
 
-Optional preparation (also used by CI):
+Optional preparation (standard Python downloader only, **no pip dependencies**):
 
 ```sh
-.venv/bin/python sample/tools/prepare_gp4.py --fetch
+python3 sample/tools/prepare_gp4.py --fetch
 # Downloads into ignored sample/local/nothing-else-matters.gp4, auto-loaded on Desktop.
-./gradlew :sample:run --args="--gp4=/absolute/path/to/song.gp4"
+./gradlew :sample:run --args="--gp4=/absolute/path/to/song.gp5"
 ```
 
-The copyrighted tab is **not bundled or committed**. The default distributable
-contains a clearly titled, original generated GP4 exercise. Android/iOS show a
-predecoded JSON version of that original exercise; **runtime GP4 import and MIDI
-playback are Desktop reference features**, not falsely enabled mobile controls.
-Replace `SampleServices` with native decoder/audio implementations in your app.
+The copyrighted tab is **not bundled or committed**. Both Android and Desktop
+initially decode a bundled, original GP4 exercise in Java. iOS retains its
+predecoded JSON/UI-only exercise; this sample-only JVM decoder/player is not
+advertised as an iOS implementation. Replace `SampleServices` for other platforms.
+TuxGuitar's selected Java sources, pin, LGPL 2.1 license and rebuild/relinking
+instructions are in [`sample-tuxguitar`](sample-tuxguitar/README.md).
 
 ## Modules and verification
 
 ```text
 score-model/   Kotlin values, ScoreAdapter, ScoreDocument, ScoreIndex, ScoreTimeline
 score-ui/      Reactive state, horizontal/wrapped layout, Canvas, highlights, input
-sample/        Consumer UI, GP4 wire mapper, Python bridge, Desktop MIDI transport
-sample/tools/  Decoder requirements, fixture generator/downloader and integration tests
+sample/        Consumer UI, JVM Kotlin adapter, Android/Desktop pickers and players
+sample-tuxguitar/  Sample-only pinned Java GP readers, models and MIDI exporter (LGPL 2.1)
+sample/tools/  Optional fixture generator, legacy JSON exporter and downloader
 ```
 
 ```sh
 ./gradlew :score-model:desktopTest :score-ui:desktopTest
-.venv/bin/python sample/tools/test_gp4.py
+./gradlew :sample:desktopTest
+./gradlew :sample:connectedDebugAndroidTest  # emulator/device
 ./gradlew :sample:assembleDebug
 ./gradlew :sample:createDistributable
 ./gradlew :sample:linkDebugFrameworkIosSimulatorArm64  # macOS
 ```
 
 [GitHub Actions](https://github.com/romankolov/compose-tab/actions/workflows/build.yml)
-runs unit/Compose pointer-keyboard tests, Python GP4/MIDI tests, attempts the exact
+runs unit/Compose pointer-keyboard tests, Java GP3/4/5 and repeat/tempo/MIDI tests, attempts the exact
 requested download, builds Android/Desktop, launches Desktop and its packaged
 binary under Xvfb, captures both layout modes and a **moving** cursor, and links
 an iOS simulator framework on macOS. External-host download failures are explicit
 warnings, not mistaken for successful verification of that song. Inspect the run
 logs and screenshot title to distinguish requested-tab vs original-fixture runs.
-Mobile UI is compiled/linked, not physical-device-tested by this workflow.
+A separate Android emulator job exercises native MIDI clock/play/pause/seek/stop
+and imports the real original fixture through the system document picker, capturing
+the playing app. This does not claim physical-device or audible listening tests.
 
 Screenshots are real captures, not generated mockups:
 [vertical](docs/screenshots/both.png) · [horizontal](docs/screenshots/horizontal.png) ·
@@ -235,7 +240,7 @@ This is a usable interactive score/tab UI, **not a notation-complete publication
 engraver**. Known engraving limits include upward stems, no key
 signatures, full tuplet brackets, slur/tie engraving, printing/pagination, or
 collision resolution for dense chords/voices. Exact timing is preserved even when
-an articulation/engraving is simplified. GP4 decode warnings surface simplified
+an articulation/engraving is simplified. Sample warnings identify simplified
 effects. Jump signs beyond ordinary repeat/alternate endings are not implemented
 in the sample MIDI exporter. Zoom/selection are not process-restoration state;
 the host can persist them. Review accessibility/device testing before a public app.

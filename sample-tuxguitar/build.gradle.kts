@@ -4,7 +4,9 @@ java {
     targetCompatibility = JavaVersion.VERSION_1_8
     withSourcesJar()
 }
-dependencies {
-    implementation("org.apache.commons:commons-compress:1.26.0")
-    implementation("commons-io:commons-io:2.15.1")
+tasks.jar {
+    from("LICENSE", "README.md") { into("META-INF/tuxguitar") }
+}
+tasks.named<Jar>("sourcesJar") {
+    from("LICENSE", "README.md") { into("META-INF/tuxguitar") }
 }

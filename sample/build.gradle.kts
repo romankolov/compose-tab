@@ -21,6 +21,12 @@ kotlin {
         androidMain.get().dependsOn(jvmSharedMain)
         getByName("desktopMain").dependsOn(jvmSharedMain)
         androidMain.dependencies { implementation("androidx.activity:activity-compose:1.10.1") }
+        androidInstrumentedTest.dependencies {
+            implementation("androidx.test:runner:1.6.2")
+            implementation("androidx.test.ext:junit:1.2.1")
+            implementation("androidx.test:core:1.6.1")
+            implementation("androidx.test.uiautomator:uiautomator:2.3.0")
+        }
         commonTest.dependencies { implementation(kotlin("test")) }
         getByName("desktopMain").dependencies {
             implementation(compose.desktop.currentOs)
@@ -30,7 +36,7 @@ kotlin {
 }
 android {
     namespace = "dev.composetab.sample"; compileSdk = 35
-    defaultConfig { applicationId = "dev.composetab.sample"; minSdk = 24; targetSdk = 35; versionCode = 1; versionName = "0.3.0" }
+    defaultConfig { applicationId = "dev.composetab.sample"; minSdk = 24; targetSdk = 35; versionCode = 1; versionName = "0.3.0"; testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner" }
 }
 compose.desktop {
     application {

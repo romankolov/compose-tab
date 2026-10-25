@@ -1,6 +1,6 @@
 # Sample-only TuxGuitar Java sources
 
-Unmodified production Java sources from TuxGuitar's `TuxGuitar-lib`,
+Selected, unmodified production Java sources from TuxGuitar's `TuxGuitar-lib`,
 `TuxGuitar-gtp`, `TuxGuitar-gm-utils`, and `TuxGuitar-midi` modules:
 https://github.com/helge17/tuxguitar/tree/b4feea4fe2f0155d648a37282ec57f1ecb329a35/common
 
@@ -10,7 +10,9 @@ GNU LGPL 2.1 (see LICENSE, copied verbatim from upstream docs/LICENSE).
 Original source headers are retained. The Gradle build and this notice are new.
 This module is only a dependency of the sample's Android/Desktop implementations;
 neither score-model nor score-ui depends on it. Classic GP1–GP5 readers and the
-platform-independent MIDI exporter are used; no Python or TuxGuitar UI is needed.
+platform-independent MIDI exporter are used; unused plugins, writers, graphical UI
+and archive utilities are omitted. No third-party Java runtime dependencies, Python
+or TuxGuitar UI are needed.
 
 Corresponding source and build scripts are supplied in this repository. When
 redistributing binaries, retain this license/notice and provide the corresponding

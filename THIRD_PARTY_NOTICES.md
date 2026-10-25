@@ -7,15 +7,19 @@ bundled at `score-ui/src/commonMain/composeResources/files/Bravura-LICENSE.txt`.
 
 Source: https://github.com/steinbergmedia/bravura/tree/master/redist/otf
 
-No TuxGuitar source or decoder implementation is bundled. Its object hierarchy
-is a conceptual reference only.
+## Sample-only Java decoder / MIDI export
 
-## Sample decoder / MIDI export
+Selected, unmodified **TuxGuitar** Java sources are vendored in `sample-tuxguitar`,
+from commit `b4feea4fe2f0155d648a37282ec57f1ecb329a35` of
+https://github.com/helge17/tuxguitar. Copyright TuxGuitar authors/contributors.
+Upstream's GNU LGPL 2.1 text is retained at `sample-tuxguitar/LICENSE`;
+provenance, scope and corresponding-source/rebuild instructions are in that module's
+README. The score libraries have no dependency on this module. No upstream UI or
+native audio engine is used; Android and Desktop use their platform MIDI players.
 
-The Desktop sample invokes the separately installed **PyGuitarPro 0.11** parser
-(LGPL-3.0) and **mido 1.3.3** (MIT) through a Python process. No implementation
-code from either is copied into the library. Install via
-`sample/tools/requirements.txt`; their distributions include their licenses.
+Optional **developer-only** fixture/legacy JSON export tools use **PyGuitarPro
+0.11** (LGPL-3.0) and **mido 1.3.3** (MIT). These are not packaged or invoked by
+the apps or required for CI decoding. Their distributions include their licenses.
 Sources: https://github.com/Perlence/PyGuitarPro and https://github.com/mido/mido.
 
 The bundled `original-study.gp4`/JSON is an original generated exercise, produced

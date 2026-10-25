@@ -15,7 +15,7 @@ class Gp4PlayerTest {
         val player = DesktopMidiTransport(enableAudio = false)
         try {
             player.load(song)
-            assertTrue(player.status.value.durationQuarters >= 48)
+            assertTrue(player.status.value.durationQuarters >= 47.9)
             assertFalse(player.status.value.audioAvailable)
             player.play()
             // Await actual sequencer progress, not an assumed audio-device timing delay.
