@@ -19,25 +19,32 @@ private val Green = Color(0xFF347B60)
 private val Ink = Color(0xFF26352F)
 
 @Composable
-fun App() {
+fun App(initialView: String = "both") {
     MaterialTheme(colorScheme = lightColorScheme(primary = Green, background = Color(0xFFF3F4EF), surface = Color(0xFFFFFEFA), onSurface = Ink)) {
         var data by remember { mutableStateOf<ScoreData?>(null) }
         LaunchedEffect(Unit) { data = MockGp5Decoder().decode(byteArrayOf()).toScoreData() }
         Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
             val song = data
             if (song == null) Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
-            else ScoreScreen(song)
+            else ScoreScreen(song, initialView)
         }
     }
 }
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun ScoreScreen(data: ScoreData) {
+private fun ScoreScreen(data: ScoreData, initialView: String) {
     val state = rememberScoreState(data)
-    var staff by remember { mutableStateOf(true) }
+    var staff by remember { mutableStateOf(initialView != "tab") }
     var tab by remember { mutableStateOf(true) }
     var selection by remember { mutableStateOf<ScoreEvent.NoteSelected?>(null) }
+    LaunchedEffect(initialView) {
+        if (initialView == "selected") {
+            state.selectedNoteId = "m0-b2-n0"
+            selection = ScoreEvent.NoteSelected("guitar", "m0", "m0-b2", "m0-b2-n0", true)
+            state.zoomTo(1.15f)
+        }
+    }
     Column(Modifier.fillMaxSize().padding(24.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
             Column {
