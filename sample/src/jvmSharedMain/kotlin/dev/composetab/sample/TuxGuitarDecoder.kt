@@ -19,7 +19,8 @@ object TuxGuitarDecoder : ScoreAdapter<ByteArray> {
 
     fun decode(bytes: ByteArray, sourceName: String = "Guitar Pro file"): SampleSong {
         require(bytes.size in 31..MAX_FILE_BYTES) { "Choose a GP1–GP5 file of at most 16 MiB" }
-        val settings = GTPSettings()
+        // Classic Guitar Pro metadata uses Windows-1252, not UTF-8.
+        val settings = GTPSettings().apply { charset = "windows-1252" }
         val readers = listOf(
             GP1InputStream(settings) to GP1InputStream.SUPPORTED_VERSIONS,
             GP2InputStream(settings) to GP2InputStream.SUPPORTED_VERSIONS,

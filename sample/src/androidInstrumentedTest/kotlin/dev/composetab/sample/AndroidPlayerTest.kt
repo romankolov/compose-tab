@@ -67,6 +67,9 @@ class AndroidPlayerTest {
             assertTrue(play.waitForExists(10_000)); play.click()
             assertTrue(device.findObject(UiSelector().text("Pause")).waitForExists(5_000))
             Thread.sleep(1200)
+            val score = device.findObject(UiSelector().descriptionContains("music score"))
+            assertTrue("Score canvas must remain visible on a phone", score.exists())
+            assertTrue("Advanced controls must not squeeze the score out", score.bounds.height() >= device.displayHeight / 5)
             // Gradle uninstalls the APK after connected tests, deleting app-owned
             // external files. Capture as shell into Downloads so CI can collect it.
             val capture = instrumentation.uiAutomation.executeShellCommand("screencap -p /sdcard/Download/compose-tab-android-playing.png")

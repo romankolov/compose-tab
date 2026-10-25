@@ -10,6 +10,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import dev.composetab.model.*
 import dev.composetab.ui.*
@@ -46,36 +47,39 @@ fun App(initialView: String = "both", services: SampleServices? = null, onLoaded
             } finally { busy = false }
         }
         Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-            Column(Modifier.fillMaxSize().padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Column {
-                        Text("COMPOSE / TAB", color = Green, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
-                        Text("Decoder in. Your player in control.", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+            BoxWithConstraints(Modifier.fillMaxSize()) {
+                val compact = maxWidth < 600.dp
+                Column(Modifier.fillMaxSize().padding(if (compact) 12.dp else 20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Column(if (compact) Modifier.fillMaxWidth() else Modifier) {
+                            Text("COMPOSE / TAB", color = Green, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+                            if (!compact) Text("Decoder in. Your player in control.", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                        }
+                        if (services != null) FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            OutlinedButton(enabled = !busy, onClick = { scope.launch {
+                                busy = true; error = null
+                                try { services.importGp()?.let { install(it) } }
+                                catch (e: Exception) { if (e is kotlinx.coroutines.CancellationException) throw e; error = e.message }
+                                finally { busy = false }
+                            } }) { Text("Load GP file") }
+                            Button(enabled = !busy, onClick = { scope.launch {
+                                busy = true; error = null
+                                try { install(services.requestedSong()) }
+                                catch (e: Exception) { if (e is kotlinx.coroutines.CancellationException) throw e; error = e.message }
+                                finally { busy = false }
+                            } }) { Text("Load requested tab") }
+                        }
                     }
-                    if (services != null) FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedButton(enabled = !busy, onClick = { scope.launch {
-                            busy = true; error = null
-                            try { services.importGp()?.let { install(it) } }
-                            catch (e: Exception) { if (e is kotlinx.coroutines.CancellationException) throw e; error = e.message }
-                            finally { busy = false }
-                        } }) { Text("Load GP file") }
-                        Button(enabled = !busy, onClick = { scope.launch {
-                            busy = true; error = null
-                            try { install(services.requestedSong()) }
-                            catch (e: Exception) { if (e is kotlinx.coroutines.CancellationException) throw e; error = e.message }
-                            finally { busy = false }
-                        } }) { Text("Load requested tab") }
+                    if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())
+                    error?.let { message ->
+                        Surface(color = MaterialTheme.colorScheme.errorContainer, shape = RoundedCornerShape(12.dp)) {
+                            Text(message, Modifier.padding(12.dp), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onErrorContainer)
+                        }
                     }
+                    val loaded = song
+                    if (loaded != null) ScoreScreen(loaded, initialView, services, Modifier.weight(1f), compact)
+                    else if (!busy) Text("Load a Guitar Pro 1–5 file to begin. No Python installation is needed.")
                 }
-                if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())
-                error?.let { message ->
-                    Surface(color = MaterialTheme.colorScheme.errorContainer, shape = RoundedCornerShape(12.dp)) {
-                        Text(message, Modifier.padding(12.dp), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onErrorContainer)
-                    }
-                }
-                val loaded = song
-                if (loaded != null) ScoreScreen(loaded, initialView, services, Modifier.weight(1f))
-                else if (!busy) Text("Load a Guitar Pro 1–5 file to begin. No Python installation is needed.")
             }
         }
     }
@@ -83,7 +87,7 @@ fun App(initialView: String = "both", services: SampleServices? = null, onLoaded
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun ScoreScreen(song: SampleSong, initialView: String, services: SampleServices?, modifier: Modifier) {
+private fun ScoreScreen(song: SampleSong, initialView: String, services: SampleServices?, modifier: Modifier, compact: Boolean) {
     val source = song.document.data
     var trackId by remember(song) { mutableStateOf(source.tracks.first().id) }
     val track = source.tracks.first { it.id == trackId }
@@ -100,6 +104,7 @@ private fun ScoreScreen(song: SampleSong, initialView: String, services: SampleS
     var playingShape by remember { mutableStateOf(HighlightShape.NoteHead) }
     var cursorShape by remember { mutableStateOf(HighlightShape.VerticalLine) }
     var menu by remember { mutableStateOf(false) }
+    var showOptions by remember { mutableStateOf(false) }
     LaunchedEffect(status.quarter, status.playing, document) {
         if (status.playing || status.quarter > 0) state.setPlaybackQuarter(status.quarter) else state.clearPlayback()
     }
@@ -112,11 +117,12 @@ private fun ScoreScreen(song: SampleSong, initialView: String, services: SampleS
     Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                Text(source.title, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.SemiBold)
+                Text(source.title, style = if (compact) MaterialTheme.typography.titleLarge else MaterialTheme.typography.headlineMedium,
+                    fontWeight = FontWeight.SemiBold, maxLines = if (compact) 2 else 4, overflow = TextOverflow.Ellipsis)
                 Text("${source.composer}  ·  ${track.measures.size} measures", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
             }
-            Box {
-                OutlinedButton(onClick = { menu = true }) { Text(track.name) }
+            Box(Modifier.widthIn(max = if (compact) 145.dp else 320.dp)) {
+                OutlinedButton(onClick = { menu = true }) { Text(track.name, maxLines = 2, overflow = TextOverflow.Ellipsis) }
                 DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                     source.tracks.forEach { item -> DropdownMenuItem(text = { Text(item.name) }, onClick = { trackId = item.id; menu = false }) }
                 }
@@ -125,19 +131,24 @@ private fun ScoreScreen(song: SampleSong, initialView: String, services: SampleS
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             FilterChip(selected = mode == ScoreLayoutMode.Vertical, onClick = { mode = ScoreLayoutMode.Vertical; state.scrollTo(0f); state.scrollVerticallyTo(0f) }, label = { Text("Vertical · wrap") })
             FilterChip(selected = mode == ScoreLayoutMode.Horizontal, onClick = { mode = ScoreLayoutMode.Horizontal; state.scrollTo(0f); state.scrollVerticallyTo(0f) }, label = { Text("Horizontal") })
-            FilterChip(selected = staff, onClick = { if (tab) staff = !staff }, label = { Text("Notation") })
-            FilterChip(selected = tab, onClick = { if (staff) tab = !tab }, label = { Text("Tab") })
-            FilterChip(selected = darkPaper, onClick = { darkPaper = !darkPaper }, label = { Text("Night") })
-            FilterChip(selected = state.followPlayback, onClick = { state.followPlayback = !state.followPlayback }, label = { Text("Follow cursor") })
+            if (compact) FilterChip(selected = showOptions, onClick = { showOptions = !showOptions }, label = { Text("Options") })
+            if (!compact || showOptions) {
+                FilterChip(selected = staff, onClick = { if (tab) staff = !staff }, label = { Text("Notation") })
+                FilterChip(selected = tab, onClick = { if (staff) tab = !tab }, label = { Text("Tab") })
+                FilterChip(selected = darkPaper, onClick = { darkPaper = !darkPaper }, label = { Text("Night") })
+                FilterChip(selected = state.followPlayback, onClick = { state.followPlayback = !state.followPlayback }, label = { Text("Follow cursor") })
+            }
         }
         Surface(Modifier.weight(1f).fillMaxWidth(), shape = RoundedCornerShape(18.dp), shadowElevation = 2.dp) {
             Column {
-                FlowRow(Modifier.padding(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    ShapePicker("Selection", selectionShape, listOf(HighlightShape.NoteHead, HighlightShape.Rectangle, HighlightShape.VerticalLine, HighlightShape.BeatColumn, HighlightShape.None)) { selectionShape = it }
-                    ShapePicker("Playing", playingShape, listOf(HighlightShape.NoteHead, HighlightShape.Rectangle, HighlightShape.VerticalLine, HighlightShape.BeatColumn, HighlightShape.None)) { playingShape = it }
-                    ShapePicker("Cursor", cursorShape, listOf(HighlightShape.VerticalLine, HighlightShape.BeatColumn, HighlightShape.None)) { cursorShape = it }
+                if (!compact || showOptions) {
+                    FlowRow(Modifier.padding(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        ShapePicker("Selection", selectionShape, listOf(HighlightShape.NoteHead, HighlightShape.Rectangle, HighlightShape.VerticalLine, HighlightShape.BeatColumn, HighlightShape.None)) { selectionShape = it }
+                        ShapePicker("Playing", playingShape, listOf(HighlightShape.NoteHead, HighlightShape.Rectangle, HighlightShape.VerticalLine, HighlightShape.BeatColumn, HighlightShape.None)) { playingShape = it }
+                        ShapePicker("Cursor", cursorShape, listOf(HighlightShape.VerticalLine, HighlightShape.BeatColumn, HighlightShape.None)) { cursorShape = it }
+                    }
+                    HorizontalDivider(color = Color(0xFFE9ECE5))
                 }
-                HorizontalDivider(color = Color(0xFFE9ECE5))
                 ScoreComposable(state, Modifier.fillMaxWidth().weight(1f), ScoreStyle(
                     showStaff = staff, showTab = tab, layoutMode = mode,
                     paper = if (darkPaper) Color(0xFF202C29) else Color(0xFFFFFEFA),

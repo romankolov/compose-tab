@@ -40,6 +40,7 @@ class Gp4PlayerTest {
         sources.forEach { (label, bytes) ->
             val song = TuxGuitarDecoder.decode(bytes, label)
             assertEquals("Open strings study", song.document.data.title)
+            assertEquals("Compose Tab · Original exercise", song.document.data.composer)
             assertEquals(12, song.document.data.tracks.single().measures.size)
             assertEquals(96, song.document.index.notes.size)
             assertEquals(48.0, song.document.timeline.durationQuarters, .001)

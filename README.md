@@ -174,6 +174,8 @@ Prerequisites: JDK 17, Android SDK 35 for Android targets; macOS/Xcode for iOS.
   is foreground-only, not a background media service. Devices missing a MIDI
   codec show an audio-unavailable message, not a fake playing clock.
 - Choose track, layout, highlight styles and cursor follow in the toolbar.
+  On phones, advanced controls are collapsed under **Options** to leave room for
+  the actual score; the Desktop layout keeps them visible.
   The sample is not a physical guitar synthesizer or full GP articulation editor.
 
 Optional preparation (standard Python downloader only, **no pip dependencies**):
