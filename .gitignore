@@ -5,3 +5,8 @@ local.properties
 .idea/
 *.iml
 .DS_Store
+.venv/
+sample/local/
+
+__pycache__/
+*.pyc

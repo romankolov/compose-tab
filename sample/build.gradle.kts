@@ -11,6 +11,8 @@ kotlin {
         commonMain.dependencies {
             implementation(project(":score-ui")); implementation(compose.material3)
             implementation(compose.foundation); implementation(compose.animation)
+            implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.8.0")
+            implementation(compose.components.resources)
         }
         androidMain.dependencies { implementation("androidx.activity:activity-compose:1.10.1") }
         getByName("desktopMain").dependencies { implementation(compose.desktop.currentOs) }
@@ -30,3 +32,5 @@ compose.desktop {
         }
     }
 }
+
+compose.resources { packageOfResClass = "dev.composetab.sample.resources" }

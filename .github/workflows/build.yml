@@ -13,12 +13,24 @@ jobs:
   desktop-android:
     runs-on: ubuntu-22.04
     timeout-minutes: 30
+    env:
+      COMPOSE_TAB_SILENT: '1'
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '17'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install and test real sample GP4 decoder
+        run: |
+          python -m pip install -r sample/tools/requirements.txt
+          python sample/tools/test_gp4.py
+          python sample/tools/prepare_gp4.py --fetch
+          python sample/src/commonMain/composeResources/files/decode_gp4.py sample/local/nothing-else-matters.gp4 > sample/local/requested.json
+          python -c "import json; x=json.load(open('sample/local/requested.json')); assert 'nothing else matters' in x['title'].lower(); print(x['title'], len(x['tracks']), len(x['moments']))"
       - uses: gradle/actions/setup-gradle@v4
       - name: Test libraries and assemble Android and Desktop
         run: |
@@ -27,7 +39,7 @@ jobs:
       - name: Capture real desktop windows
         run: |
           mkdir -p docs/screenshots
-          for view in both tab selected; do
+          for view in both tab selected horizontal playing; do
             timeout 120s xvfb-run -a -s '-screen 0 1280x900x24' ./gradlew :sample:run --args="--screenshot=$PWD/docs/screenshots/$view.png --view=$view"
           done
       - name: Smoke-test packaged app and archive executable permissions
