@@ -8,6 +8,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.input.key.*
 import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.isCtrlPressed as isPointerCtrlPressed
 import androidx.compose.ui.semantics.*
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
@@ -91,7 +92,7 @@ fun ScoreComposable(
                         val delta = event.changes.fold(Offset.Zero) { acc, change -> acc + change.scrollDelta }
                         val maxX = (layout.width - size.width / (density * state.zoom)).coerceAtLeast(0f)
                         val maxY = (layout.height - size.height / (density * state.zoom)).coerceAtLeast(0f)
-                        if (event.keyboardModifiers.isCtrlPressed) state.zoomTo(state.zoom - delta.y * .08f)
+                        if (event.keyboardModifiers.isPointerCtrlPressed) state.zoomTo(state.zoom - delta.y * .08f)
                         else if (layout.rows.size <= 1 && maxX > 0f) state.scrollTo((state.scroll + (delta.x + delta.y) * 32 / state.zoom).coerceIn(0f, maxX))
                         else {
                             state.scrollTo((state.scroll + delta.x * 32 / state.zoom).coerceIn(0f, maxX))
@@ -197,7 +198,7 @@ fun ScoreComposable(
                         if (style.showTab) {
                             drawRect(style.paper, Offset(bx - 8, ty - 7), Size(16f, 14f))
                             if (note.id == state.selectedNoteId) drawRoundRect(style.selection, Offset(bx - 12, ty - 10), Size(24f, 20f))
-                            label(note.fret.toString(), bx - if (note.fret >= 10) 7 else 3.5f, ty - 8, 13f)
+                            label(note.fret.toString(), bx - if (note.fret >= 10) 7f else 3.5f, ty - 8, 13f)
                         }
                         val effectY = if (style.showTab) tabY - 16 else y - 27
                         note.effects.forEach { effect ->
