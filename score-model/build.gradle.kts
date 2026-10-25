@@ -1,5 +1,8 @@
 plugins {
-    `maven-publish` kotlin("multiplatform"); id("com.android.library") }
+    id("maven-publish")
+    kotlin("multiplatform")
+    id("com.android.library")
+}
 kotlin {
     androidTarget { publishLibraryVariants("release") }; jvm("desktop"); iosArm64(); iosSimulatorArm64(); iosX64()
     sourceSets { commonTest.dependencies { implementation(kotlin("test")) } }

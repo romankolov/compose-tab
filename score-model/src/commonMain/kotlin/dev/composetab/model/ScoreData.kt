@@ -7,6 +7,7 @@ data class ScoreData(val title: String, val composer: String = "", val tracks: L
         val ids = tracks.flatMap { t -> listOf(t.id) + t.measures.flatMap { m ->
             listOf(m.id) + m.beats.flatMap { b -> listOf(b.id) + b.notes.map { it.id } }
         } }
+        require(ids.all { it.isNotBlank() }) { "Score IDs must not be blank" }
         require(ids.size == ids.toSet().size) { "Score IDs must be globally unique" }
     }
 }
@@ -27,16 +28,22 @@ enum class Duration(val quarters: Float) {
 data class Beat(
     val id: String, val duration: Duration = Duration.Quarter, val dotted: Boolean = false,
     val notes: List<Note> = emptyList(),
-) { val isRest: Boolean get() = notes.isEmpty() }
+) {
+    init { require(notes.map { it.string }.distinct().size == notes.size) { "A beat cannot contain two frets on the same string" } }
+    val isRest: Boolean get() = notes.isEmpty()
+    val durationQuarters: Float get() = duration.quarters * if (dotted) 1.5f else 1f
+}
 enum class Accidental { Natural, Sharp, Flat }
 /** staffStep: diatonic offset from treble staff's bottom E4 line (0), not a MIDI offset.
  * Explicit spelling keeps enharmonic and key-signature decisions in the mapping layer. */
 data class Note(
     val id: String, val midi: Int, val string: Int, val fret: Int,
     val staffStep: Int, val accidental: Accidental? = null, val effects: List<Effect> = emptyList(),
-) { init { require(midi in 0..127); require(string > 0); require(fret >= 0) } }
+) { init { require(midi in 0..127); require(string > 0); require(fret >= 0); require(staffStep in -70..70) } }
 sealed interface Effect {
-    data class Bend(val semitones: Float = 1f) : Effect
+    data class Bend(val semitones: Float = 1f) : Effect {
+        init { require(semitones.isFinite() && semitones >= 0f) }
+    }
     data object Slide : Effect
     data object HammerOn : Effect
     data object PullOff : Effect

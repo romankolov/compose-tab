@@ -44,5 +44,5 @@ data class ScoreStyle(
     val showStaff: Boolean = true,
     val showTab: Boolean = true,
 ) {
-    init { require(measureWidth >= 140f); require(lineSpacing >= 6f); require(trackSpacing >= 220f) }
+    init { require(measureWidth.isFinite() && measureWidth >= 140f); require(lineSpacing.isFinite() && lineSpacing >= 6f); require(trackSpacing.isFinite() && trackSpacing >= 220f) }
 }

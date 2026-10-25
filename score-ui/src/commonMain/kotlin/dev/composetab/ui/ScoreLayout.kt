@@ -82,13 +82,13 @@ internal fun layoutScore(data: ScoreData, style: ScoreStyle): ScoreLayout {
             val x = offsets[index]
             val width = widths[index]
             val y = 70f + trackIndex * rowHeight
-            val total = measure.beats.sumOf { (it.duration.quarters * if (it.dotted) 1.5f else 1f).toDouble() }.toFloat().coerceAtLeast(1f)
+            val total = measure.beats.sumOf { it.durationQuarters.toDouble() }.toFloat().coerceAtLeast(1f)
             var elapsed = 0f
             val extraSpace = (width - 80f - measure.beats.size * 32f).coerceAtLeast(0f)
             val beats = measure.beats.mapIndexed { beatIndex, beat ->
                 val bx = x + 54f + beatIndex * 32f + elapsed / total * extraSpace
                 val onset = elapsed
-                elapsed += beat.duration.quarters * if (beat.dotted) 1.5f else 1f
+                elapsed += beat.durationQuarters
                 beat.notes.forEach { note ->
                     require(note.string <= track.tuning.size) { "Note ${note.id} uses a string outside track tuning" }
                     fun target(ny: Float, tab: Boolean) {

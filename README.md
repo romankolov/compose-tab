@@ -1,6 +1,6 @@
 # Compose Tab
 
-A UI-only Compose Multiplatform foundation for interactive guitar scores. Shared Kotlin code targets **Android, iOS and Desktop**. No player, audio engine, file parser or decoder dependency is included in the library.
+Version **0.2.0** · A UI-only Compose Multiplatform library for interactive guitar scores. Shared Kotlin code targets **Android, iOS and Desktop**. No player, audio engine, file parser or decoder dependency is included in the library.
 
 ## Modules
 
@@ -14,7 +14,7 @@ sample/        Independent consumer app, mock decoder, adapter and score studio 
   src/iosMain/     MainViewController for a Swift host
 ```
 
-The sample has a warm paper/green theme, notation/tab visibility controls, an animated zoom slider, drag/pinch navigation and an animated selection inspector. It intentionally has no playback controls.
+The sample has a warm paper/green theme, notation/tab visibility controls, an animated zoom slider, drag/pinch navigation and an animated selection inspector. It intentionally has no playback controls. Night-paper styling and a pitch/string/fret inspector demonstrate host-driven customization.
 
 ## Run
 
@@ -27,9 +27,13 @@ Prerequisites: JDK 17+, Android SDK 35 (the included build config configures And
 ./gradlew :sample:linkDebugFrameworkIosSimulatorArm64  # macOS
 ```
 
-For iOS, embed the generated `ComposeTabSample.framework` in a Swift Xcode app and return `MainViewControllerKt.MainViewController()` from a `UIViewControllerRepresentable`. A full Xcode host/project and signing configuration are not included. The Gradle sample is the separate application context; neither library module depends on it.
+For iOS, embed the generated `ComposeTabSample.framework` in a Swift Xcode app and return `MainViewControllerKt.MainViewController()` from a `UIViewControllerRepresentable`. A SwiftUI host source is provided in `sample/iosApp/ScoreStudioApp.swift`; a generated Xcode project and signing configuration are not included. For local device builds, add a Run Script phase invoking `./gradlew :sample:embedAndSignAppleFrameworkForXcode` from the repository root, disable User Script Sandboxing, and follow Compose Multiplatform framework embedding conventions so bundled font resources are copied too. The Gradle sample is the separate application context; neither library module depends on it.
 
-**Validation status:** tests are supplied but not executed in the authoring environment, which has no Java installation. The Gradle wrapper is included; compilation and platform UI/device verification remain necessary before release.
+## GitHub build and real captures
+
+`.github/workflows/build.yml` builds the Android APK and Desktop app, runs model/layout tests and real Compose pointer/keyboard tests under Xvfb, links an iOS simulator framework on macOS, and runs the Desktop application three times to capture real windows. APK, framework, screenshots, and test reports are downloadable from each successful Actions run. Captures are also attached to this branch in `docs/screenshots/`. Images are produced by `java.awt.Robot`, not generated mockups. Physical Android/iOS device testing is still a release requirement.
+
+The sandbox has no JDK; build validation runs on GitHub-hosted runners. See the PR checks for the verified source revision.
 
 ## Public API
 
@@ -76,7 +80,7 @@ See `sample/.../DecoderAdapter.kt` for a deliberately small, suspendable decoder
 ## Rendering architecture
 
 1. **Model:** score values, with no drawing or platform concepts.
-2. **Layout:** `layoutScore` computes score-space measure bounds, duration-proportional beat positions and independent staff/tab hit rectangles.
+2. **Layout:** `layoutScore` computes aligned, adaptive measure columns, duration-weighted beat positions with minimum spacing, meter-aware beam segments, and independent staff/tab hit rectangles.
 3. **Canvas:** uses cached geometry; converts logical dp to physical pixels once, applies viewport transforms, and skips off-screen measures before drawing.
 4. **Interaction:** maps input back into score coordinates and emits stable-ID events. Staff note heads and fret numbers both select the same note while reporting which representation was clicked.
 
@@ -91,7 +95,7 @@ The baseline draws staff/tab lines, ledger lines, note heads, stems, basic beams
 - Layout is memoized by data/style and is unaffected by selection or viewport changes.
 - Canvas draws only visible measures in both axes; text layouts are cached with `rememberTextMeasurer`.
 - Draw hit targets and notes from the same geometry to prevent independent drift.
-- Current visibility filtering and hit lookup scan their lists (O(n)); for large scores use per-track binary search over measure bounds and a spatial index for hit targets. Layout itself is whole-score and synchronous: compute incremental layouts off the UI thread for very large documents.
+- Visibility and hit lookup binary-search sorted measure bounds per visible track, then inspect only candidate measures. Keyboard navigation flattens targets on demand. Layout itself is whole-score and synchronous: compute incremental layouts off the UI thread for very large documents.
 - Repeated lines are cheap vector primitives. For heavier static engraving, cache per-measure `ImageBitmap` tiles keyed by score revision, style, density and zoom bucket. Keep selection overlays live; evict tiles using an LRU memory budget. Bitmap caching is an optimization design, **not implemented here**, because it can blur during zoom and consume substantial memory.
 
 ## Scope / engraving limitations
@@ -99,11 +103,24 @@ The baseline draws staff/tab lines, ledger lines, note heads, stems, basic beams
 This is an extensible working implementation scaffold, **not a complete production engraving engine**. In particular:
 
 - One continuous horizontal system per track, no wrapping, pagination or print layout.
-- Basic beams connect consecutive short beats, not meter-aware beam groups; fixed upward stems, simplified rest shapes and no collision resolution for chords/accidentals/effects.
-- No clef/key-signature engraving, multi-voice timing, ties, tuplets, grace notes, alternate endings or cross-staff notation yet.
-- Ordinary system text is used for tab and accidental symbols; a bundled SMuFL music font and glyph metrics are recommended for production consistency.
-- Effect marks are illustrative, not complete GP5 effect semantics. Extreme tunings/string counts need host-adjusted track spacing.
-- Touch and pointer drag/pinch are implemented; no wheel/trackpad-scroll handler, keyboard navigation or per-note accessibility semantics yet. Canvas is not a substitute for a semantic accessibility tree; add one before shipping an accessible editor.
+- Beam groups follow simple and compound meter with mixed-duration hooks. Asymmetric meter needs an explicit custom grouping policy. Stems point upward; no collision resolution for chord seconds/accidentals/effects yet.
+- Treble clef only; no key-signature engraving, multi-voice timing, ties, tuplets, grace notes, alternate endings or cross-staff notation yet.
+- Bundled OFL-licensed Bravura SMuFL glyphs render treble clefs, rests and accidentals. Noteheads, stems, beams and effects use vector geometry. Fret numbers use system text. See `THIRD_PARTY_NOTICES.md`.
+- Effect marks are illustrative, not complete GP5 effect semantics. Track height expands for tuning string count; extreme ledger ranges may need host-adjusted track spacing.
+- Touch/pointer drag and pinch, wheel/trackpad pan, Ctrl+wheel zoom, arrow-key note navigation, Escape to clear, and +/− zoom are implemented. Click the score to focus it. Canvas exposes score descriptions and next/previous/zoom accessibility actions; a full per-note semantic tree and screen-reader pitch announcements still need expansion before shipping an accessible editor.
 - Zoom/selection are not saveable across process recreation; the host can persist its own state.
 
 Before release: compile all targets, run the supplied model/layout tests, add screenshot/golden and pointer tests, test physical touch devices and build an accessibility overlay. No audio or file decoding should enter either library module during these extensions.
+
+## Consuming library artifacts
+
+The library modules use `maven-publish` with group `dev.composetab`, version `0.2.0`, including sources, KMP metadata and Android release variants. No Maven Central publication is claimed.
+
+```sh
+# Publish all supported targets on macOS with Android SDK + Xcode installed:
+./gradlew :score-model:publishToMavenLocal :score-ui:publishToMavenLocal
+# A desktop-only local build on Linux:
+./gradlew :score-model:publishDesktopPublicationToMavenLocal :score-ui:publishDesktopPublicationToMavenLocal
+```
+
+For an app in this repository use `implementation(project(":score-ui"))`. A separately published KMP consumer uses `implementation("dev.composetab:score-ui:0.2.0")`; publish the root KMP and required platform publications together before using that coordinate. An optional `Build` Maven repository writes to each module's `build/repository` for staging. Production repository URL, signing, and credentials should be configured by the maintainer, never embedded in source.
