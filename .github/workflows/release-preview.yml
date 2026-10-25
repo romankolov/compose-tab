@@ -1,5 +1,8 @@
 name: Ship verified preview
 on:
+  push:
+    branches: ['arena/**']
+    paths: ['.github/workflows/release-preview.yml']
   workflow_dispatch:
     inputs:
       run_id:
@@ -14,6 +17,7 @@ permissions:
   actions: read
 jobs:
   release:
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v5
