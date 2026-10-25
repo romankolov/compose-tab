@@ -11,7 +11,7 @@ import kotlinx.coroutines.withTimeout
 import org.junit.Assert.*
 import org.junit.Test
 import org.junit.runner.RunWith
-import java.io.File
+import android.os.ParcelFileDescriptor
 import kotlin.math.abs
 
 @RunWith(AndroidJUnit4::class)
@@ -45,7 +45,6 @@ class AndroidPlayerTest {
 
     @Test fun realSafFileImportAndPlaybackUi() {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
-        val context = instrumentation.targetContext
         val device = UiDevice.getInstance(instrumentation)
         ActivityScenario.launch(MainActivity::class.java).use {
             val load = device.findObject(UiSelector().text("Load GP file"))
@@ -68,8 +67,10 @@ class AndroidPlayerTest {
             assertTrue(play.waitForExists(10_000)); play.click()
             assertTrue(device.findObject(UiSelector().text("Pause")).waitForExists(5_000))
             Thread.sleep(1200)
-            val image = File(context.getExternalFilesDir(null), "android-playing.png")
-            assertTrue(device.takeScreenshot(image))
+            // Gradle uninstalls the APK after connected tests, deleting app-owned
+            // external files. Capture as shell into Downloads so CI can collect it.
+            val capture = instrumentation.uiAutomation.executeShellCommand("screencap -p /sdcard/Download/compose-tab-android-playing.png")
+            ParcelFileDescriptor.AutoCloseInputStream(capture).use { it.readBytes() }
             // Android onStop pauses, rather than continuing sound behind another app.
             device.pressHome()
             device.waitForIdle()

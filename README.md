@@ -223,7 +223,8 @@ the playing app. This does not claim physical-device or audible listening tests.
 
 Screenshots are real captures, not generated mockups:
 [vertical](docs/screenshots/both.png) · [horizontal](docs/screenshots/horizontal.png) ·
-[playing cursor](docs/screenshots/playing.png) · [selection](docs/screenshots/selected.png).
+[playing cursor](docs/screenshots/playing.png) · [selection](docs/screenshots/selected.png) ·
+[Android import/playback](docs/screenshots/android-playing.png).
 
 ## Performance and extension boundaries
 

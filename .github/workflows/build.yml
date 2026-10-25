@@ -59,7 +59,11 @@ jobs:
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add docs/screenshots/*.png
           git diff --cached --quiet || git commit -m "docs: attach CI desktop screenshots [skip ci]"
-          git push origin HEAD:${{ github.ref_name }}
+          for attempt in 1 2 3; do
+            git pull --rebase origin "${{ github.ref_name }}"
+            if git push origin HEAD:${{ github.ref_name }}; then exit 0; fi
+          done
+          exit 1
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -114,7 +118,19 @@ jobs:
             adb push sample/src/commonMain/composeResources/files/original-study.gp4 /sdcard/Download/original-study.gp4
             bash -o pipefail -c './gradlew :sample:connectedDebugAndroidTest --console=plain 2>&1 | tee android-build-log.txt'
             mkdir -p docs/screenshots
-            adb pull /sdcard/Android/data/dev.composetab.sample/files/android-playing.png docs/screenshots/android-playing.png
+            adb pull /sdcard/Download/compose-tab-android-playing.png docs/screenshots/android-playing.png
+      - name: Attach Android emulator capture to this branch
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/heads/arena/')
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add docs/screenshots/android-playing.png
+          git diff --cached --quiet || git commit -m "docs: attach Android emulator playback screenshot [skip ci]"
+          for attempt in 1 2 3; do
+            git pull --rebase origin "${{ github.ref_name }}"
+            if git push origin HEAD:${{ github.ref_name }}; then exit 0; fi
+          done
+          exit 1
       - uses: actions/upload-artifact@v4
         if: always()
         with:
