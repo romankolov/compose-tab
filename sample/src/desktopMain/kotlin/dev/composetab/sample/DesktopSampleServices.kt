@@ -44,7 +44,7 @@ class DesktopSampleServices(private val input: String? = null) : SampleServices 
         try {
             val connection = URI("https://gprotab.net/en/tabs/metallica/nothing-else-matters?download").toURL().openConnection() as HttpURLConnection
             connection.connectTimeout = 15000; connection.readTimeout = 45000
-            connection.setRequestProperty("User-Agent", "ComposeTab sample/0.3")
+            connection.setRequestProperty("User-Agent", "Mozilla/5.0 (compatible; ComposeTabSample/0.3)")
             try {
                 require(connection.responseCode in 200..299) { "Download failed: HTTP ${connection.responseCode}. Save the supplied link and use Open GP4." }
                 connection.inputStream.use { stream ->
@@ -71,9 +71,10 @@ class DesktopSampleServices(private val input: String? = null) : SampleServices 
                 val output = File(directory, "score.json")
                 val errors = File(directory, "errors.txt")
                 val python = System.getenv("COMPOSE_TAB_PYTHON") ?: File(".venv/bin/python").takeIf { it.isFile }?.absolutePath ?: "python3"
-                process = ProcessBuilder(python, tool.absolutePath, file.absolutePath).redirectOutput(output).redirectError(errors).start()
-                if (!process.waitFor(45, TimeUnit.SECONDS)) error("GP4 decoder timed out")
-                check(process.exitValue() == 0) { errors.readText().take(2000) + "\nInstall sample/tools/requirements.txt; set COMPOSE_TAB_PYTHON to your Python 3.10+ executable." }
+                val started = ProcessBuilder(python, tool.absolutePath, file.absolutePath).redirectOutput(output).redirectError(errors).start()
+                process = started
+                if (!started.waitFor(45, TimeUnit.SECONDS)) error("GP4 decoder timed out")
+                check(started.exitValue() == 0) { errors.readText().take(2000) + "\nInstall sample/tools/requirements.txt; set COMPOSE_TAB_PYTHON to your Python 3.10+ executable." }
                 require(output.length() <= 64L * 1024 * 1024) { "Decoded score exceeds sample memory limit" }
                 Gp4DocumentAdapter.parse(output.readText(), label)
             } finally { process?.destroyForcibly(); directory.deleteRecursively() }

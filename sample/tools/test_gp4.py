@@ -3,6 +3,8 @@ import importlib.util
 import io
 import tempfile
 import unittest
+import sys
+sys.dont_write_bytecode = True
 from pathlib import Path
 from types import SimpleNamespace
 import mido

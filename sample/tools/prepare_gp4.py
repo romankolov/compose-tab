@@ -43,7 +43,7 @@ def fixture():
 def fetch():
     target = ROOT / 'sample/local/nothing-else-matters.gp4'
     target.parent.mkdir(parents=True, exist_ok=True)
-    request = urllib.request.Request(URL, headers={'User-Agent': 'ComposeTab sample/0.3'})
+    request = urllib.request.Request(URL, headers={'User-Agent': 'Mozilla/5.0 (compatible; ComposeTabSample/0.3)'})
     with urllib.request.urlopen(request, timeout=45) as response:
         content = response.read(16 * 1024 * 1024 + 1)
     if len(content) > 16 * 1024 * 1024 or b'FICHIER GUITAR PRO v4.' not in content[:31]:

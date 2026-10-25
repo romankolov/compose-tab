@@ -47,6 +47,8 @@ class ScoreState(initialData: ScoreData) {
     var verticalScroll by mutableFloatStateOf(0f)
         private set
 
+    constructor(initialDocument: ScoreDocument) : this(initialDocument.data) { document = initialDocument }
+
     /** Publish replacement values on the UI thread. A replacement prunes stale IDs. */
     fun submit(value: ScoreDocument, resetViewport: Boolean = false) {
         if (document === value) return
@@ -73,6 +75,9 @@ class ScoreState(initialData: ScoreData) {
 }
 
 @Composable
+fun rememberScoreState(): ScoreState = remember { ScoreState(ScoreData("Untitled", tracks = emptyList())) }
+
+@Composable
 fun rememberScoreState(data: ScoreData): ScoreState {
     val state = remember { ScoreState(data) }
     SideEffect { state.data = data }
@@ -81,7 +86,7 @@ fun rememberScoreState(data: ScoreData): ScoreState {
 
 @Composable
 fun rememberScoreState(document: ScoreDocument): ScoreState {
-    val state = remember { ScoreState(document.data) }
+    val state = remember { ScoreState(document) }
     SideEffect { if (state.document !== document) state.submit(document) }
     return state
 }
