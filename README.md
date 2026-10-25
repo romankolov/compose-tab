@@ -143,3 +143,5 @@ To package locally: `./gradlew :sample:createDistributable`. To recreate an indi
 ### Shipping a verified preview
 
 `Ship verified preview` is a manual GitHub workflow. Supply a **successful build run ID from this branch** and a new preview tag. It verifies the run, downloads the already-tested artifacts (rather than rebuilding different binaries), and creates a prerelease attached to that exact source revision. It does not merge the PR, switch branches, upload to Maven Central, or publish to mobile stores.
+
+If the GitHub App cannot dispatch workflows, the same verified-artifact shipping path can be triggered by an explicit `ship: verified preview …` commit updating `.github/preview-release.json` on the working branch. Ordinary pushes do **not** publish a release. The request must name a successful build from this branch and a new `vX.Y.Z-preview.N` tag; existing releases are not overwritten.
