@@ -10,7 +10,15 @@ kotlin {
         api(compose.runtime); implementation(compose.foundation)
         api(compose.ui); implementation(compose.animation)
         implementation(compose.components.resources)
-    }; commonTest.dependencies { implementation(kotlin("test")) } }
+    }
+        commonTest.dependencies { implementation(kotlin("test")) }
+        val desktopTest by getting {
+            dependencies {
+                implementation(compose.desktop.uiTestJUnit4)
+                implementation(compose.desktop.currentOs)
+            }
+        }
+    }
 }
 android { namespace = "dev.composetab.ui"; compileSdk = 35; defaultConfig { minSdk = 24 } }
 

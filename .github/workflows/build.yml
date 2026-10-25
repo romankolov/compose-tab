@@ -23,7 +23,7 @@ jobs:
       - name: Test libraries and assemble Android and Desktop
         run: |
           set -o pipefail
-          ./gradlew :score-model:desktopTest :score-ui:desktopTest :sample:assembleDebug :sample:desktopJar --console=plain 2>&1 | tee build-log.txt
+          xvfb-run -a ./gradlew :score-model:desktopTest :score-ui:desktopTest :sample:assembleDebug :sample:desktopJar --console=plain 2>&1 | tee build-log.txt
       - name: Report build failure on PR
         if: failure()
         env:

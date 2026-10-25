@@ -13,7 +13,7 @@ kotlin {
             implementation(compose.foundation); implementation(compose.animation)
         }
         androidMain.dependencies { implementation("androidx.activity:activity-compose:1.10.1") }
-        desktopMain.dependencies { implementation(compose.desktop.currentOs) }
+        getByName("desktopMain").dependencies { implementation(compose.desktop.currentOs) }
     }
 }
 android {

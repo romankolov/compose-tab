@@ -13,6 +13,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import dev.composetab.model.ScoreData
+import dev.composetab.model.Note
 import dev.composetab.ui.*
 
 private val Green = Color(0xFF347B60)
@@ -37,6 +38,7 @@ private fun ScoreScreen(data: ScoreData, initialView: String) {
     val state = rememberScoreState(data)
     var staff by remember { mutableStateOf(initialView != "tab") }
     var tab by remember { mutableStateOf(true) }
+    var darkPaper by remember { mutableStateOf(false) }
     var selection by remember { mutableStateOf<ScoreEvent.NoteSelected?>(null) }
     LaunchedEffect(initialView) {
         if (initialView == "selected") {
@@ -64,6 +66,7 @@ private fun ScoreScreen(data: ScoreData, initialView: String) {
             AssistChip(onClick = {}, label = { Text("4/4 · Andante") })
             FilterChip(selected = staff, onClick = { if (tab) staff = !staff }, label = { Text("Notation") })
             FilterChip(selected = tab, onClick = { if (staff) tab = !tab }, label = { Text("Tablature") })
+            FilterChip(selected = darkPaper, onClick = { darkPaper = !darkPaper }, label = { Text("Night paper") })
         }
         Surface(Modifier.weight(1f).fillMaxWidth(), shape = RoundedCornerShape(20.dp), shadowElevation = 2.dp) {
             Column {
@@ -75,7 +78,13 @@ private fun ScoreScreen(data: ScoreData, initialView: String) {
                     Text("${data.tracks.first().measures.size} measures", style = MaterialTheme.typography.labelMedium, color = Color.Gray)
                 }
                 HorizontalDivider(color = Color(0xFFE9ECE5))
-                ScoreComposable(state, Modifier.fillMaxWidth().weight(1f), ScoreStyle(showStaff = staff, showTab = tab), onEvent = { event ->
+                ScoreComposable(state, Modifier.fillMaxWidth().weight(1f), ScoreStyle(
+                    showStaff = staff, showTab = tab,
+                    paper = if (darkPaper) Color(0xFF202C29) else Color(0xFFFFFEFA),
+                    ink = if (darkPaper) Color(0xFFE9F0E6) else Ink,
+                    muted = if (darkPaper) Color(0xFF9CAEA1) else Color(0xFF89938B),
+                    accent = if (darkPaper) Color(0xFF8AD5AB) else Green,
+                ), onEvent = { event ->
                     when (event) {
                         is ScoreEvent.NoteSelected -> selection = event
                         ScoreEvent.SelectionCleared -> selection = null
@@ -94,9 +103,14 @@ private fun ScoreScreen(data: ScoreData, initialView: String) {
         AnimatedVisibility(selection != null) {
             Row(Modifier.fillMaxWidth().background(Color(0xFFE3ECE3), RoundedCornerShape(12.dp)).padding(16.dp), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text("Note selected", color = Green, fontWeight = FontWeight.Medium)
-                Text(selection?.noteId.orEmpty(), style = MaterialTheme.typography.bodySmall, color = Green)
+                val note = data.tracks.flatMap { it.measures }.flatMap { it.beats }.flatMap { it.notes }
+                    .firstOrNull { it.id == selection?.noteId }
+                Text(note?.let { "${it.pitchName()}  ·  String ${it.string}  ·  Fret ${it.fret}" }.orEmpty(), style = MaterialTheme.typography.bodySmall, color = Green)
             }
         }
-        Text("Drag to explore  ·  Pinch to zoom  ·  Select a note to inspect", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+        Text("Drag / scroll to explore  ·  Pinch or Ctrl+wheel to zoom  ·  ← → navigate notes", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
     }
 }
+
+private fun Note.pitchName(): String =
+    listOf("C", "C♯", "D", "D♯", "E", "F", "F♯", "G", "G♯", "A", "A♯", "B")[midi % 12] + (midi / 12 - 1)
