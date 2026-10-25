@@ -23,6 +23,10 @@ import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.sp
 import dev.composetab.model.*
+import androidx.compose.ui.text.font.FontFamily
+import org.jetbrains.compose.resources.Font
+import dev.composetab.ui.resources.Res
+import dev.composetab.ui.resources.bravura
 
 /** Horizontal continuous score. Drag to pan; pinch to zoom; click a note or fret to select.
  * onDrawEffect is an additive extension hook in score-space coordinates (logical dp).
@@ -38,6 +42,7 @@ fun ScoreComposable(
     val layout = remember(state.data, style) { layoutScore(state.data, style) }
     val zoom by animateFloatAsState(state.zoom, spring(stiffness = 500f), label = "score zoom")
     val text = rememberTextMeasurer(cacheSize = 256)
+    val musicFamily = FontFamily(Font(Res.font.bravura))
     val currentEvent by rememberUpdatedState(onEvent)
     val focus = remember { FocusRequester() }
     fun viewportEvent() = currentEvent(ScoreEvent.ViewportChanged(state.zoom, state.scroll, state.verticalScroll))
@@ -130,8 +135,12 @@ fun ScoreComposable(
         val scrollY = state.verticalScroll.coerceAtMost((layout.height - size.height / factor).coerceAtLeast(0f))
         fun DrawScope.label(value: String, x: Float, y: Float, font: Float = 12f, muted: Boolean = false) {
             // Counteract density here: the entire logical drawing is scaled by density below.
-            val result = text.measure(value, TextStyle(color = if (muted) style.muted else style.ink, fontSize = (font / density).sp))
+            val result = text.measure(value, TextStyle(color = if (muted) style.muted else style.ink, fontSize = (font / (density * fontScale)).sp))
             drawText(result, topLeft = Offset(x, y))
+        }
+        fun DrawScope.music(glyph: String, x: Float, baseline: Float, font: Float = 40f) {
+            val result = text.measure(glyph, TextStyle(color = style.ink, fontFamily = musicFamily, fontSize = (font / (density * fontScale)).sp))
+            drawText(result, topLeft = Offset(x, baseline - result.firstBaseline))
         }
         withTransform({ scale(factor, factor, Offset.Zero); translate(-scrollX, -scrollY) }) {
             // Cull complete measures before drawing any notation or measuring text.
@@ -147,6 +156,7 @@ fun ScoreComposable(
                 }
                 if (style.showStaff) {
                     lines(y, 5)
+                    if (measure == track.measures.firstOrNull()) music("\uE050", x - 24, y + 3 * gap, gap * 4)
                     label("${measure.time.numerator}", x + 14, y + 1, 17f)
                     label("${measure.time.denominator}", x + 14, y + 20, 17f)
                 }
@@ -160,11 +170,13 @@ fun ScoreComposable(
                 beats.forEach { (beat, bx) ->
                     if (beat.isRest) {
                         if (style.showStaff) {
-                            if (beat.duration == Duration.Whole || beat.duration == Duration.Half) drawRect(style.ink, Offset(bx - 4, y + 15), Size(9f, 4f))
-                            else {
-                                val rest = Path().apply { moveTo(bx - 2, y + 8); lineTo(bx + 3, y + 17); lineTo(bx - 3, y + 23); lineTo(bx + 3, y + 31) }
-                                drawPath(rest, style.ink, style = Stroke(2.5f))
+                            val rest = when (beat.duration) {
+                                Duration.Whole -> "\uE4E3"; Duration.Half -> "\uE4E4"
+                                Duration.Quarter -> "\uE4E5"; Duration.Eighth -> "\uE4E6"
+                                Duration.Sixteenth -> "\uE4E7"; Duration.ThirtySecond -> "\uE4E8"
                             }
+                            music(rest, bx - 5, y + 2 * gap, gap * 4)
+                            if (beat.dotted) drawCircle(style.ink, 1.6f, Offset(bx + 10, y + 1.5f * gap))
                         }
                         if (style.showTab) label("–", bx - 4, tabY + 16, 13f, true)
                     }
@@ -173,18 +185,18 @@ fun ScoreComposable(
                         val ty = tabY + (note.string - 1) * gap
                         if (note.id == state.selectedNoteId) {
                             if (style.showStaff) drawCircle(style.selection, 13f, Offset(bx, ny))
-                            if (style.showTab) drawRoundRect(style.selection, Offset(bx - 12, ty - 10), Size(24f, 20f))
                         }
                         if (style.showStaff) {
                             // Ledger lines on every second staff step outside the five-line staff.
                             if (note.staffStep < 0) for (step in -2 downTo note.staffStep step 2) drawLine(style.ink, Offset(bx - 9, y + 4 * gap - step * gap / 2), Offset(bx + 9, y + 4 * gap - step * gap / 2), .8f)
                             if (note.staffStep > 8) for (step in 10..note.staffStep step 2) drawLine(style.ink, Offset(bx - 9, y + 4 * gap - step * gap / 2), Offset(bx + 9, y + 4 * gap - step * gap / 2), .8f)
                             drawOval(style.ink, Offset(bx - 5, ny - 3.5f), Size(10f, 7f), style = if (beat.duration in listOf(Duration.Whole, Duration.Half)) Stroke(1.5f) else Fill)
-                            note.accidental?.let { label(when (it) { Accidental.Sharp -> "♯"; Accidental.Flat -> "♭"; Accidental.Natural -> "♮" }, bx - 19, ny - 11, 17f) }
+                            note.accidental?.let { music(when (it) { Accidental.Sharp -> "\uE262"; Accidental.Flat -> "\uE260"; Accidental.Natural -> "\uE261" }, bx - 17, ny, gap * 4) }
                             if (beat.dotted) drawCircle(style.ink, 1.6f, Offset(bx + 10, ny - 2))
                         }
                         if (style.showTab) {
                             drawRect(style.paper, Offset(bx - 8, ty - 7), Size(16f, 14f))
+                            if (note.id == state.selectedNoteId) drawRoundRect(style.selection, Offset(bx - 12, ty - 10), Size(24f, 20f))
                             label(note.fret.toString(), bx - if (note.fret >= 10) 7 else 3.5f, ty - 8, 13f)
                         }
                         val effectY = if (style.showTab) tabY - 16 else y - 27

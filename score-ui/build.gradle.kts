@@ -1,13 +1,30 @@
 plugins {
+    `maven-publish`
     kotlin("multiplatform"); id("com.android.library")
     id("org.jetbrains.compose"); id("org.jetbrains.kotlin.plugin.compose")
 }
 kotlin {
-    androidTarget(); jvm("desktop"); iosArm64(); iosSimulatorArm64(); iosX64()
+    androidTarget { publishLibraryVariants("release") }; jvm("desktop"); iosArm64(); iosSimulatorArm64(); iosX64()
     sourceSets { commonMain.dependencies {
         api(project(":score-model"))
-        implementation(compose.runtime); implementation(compose.foundation)
-        implementation(compose.ui); implementation(compose.animation)
+        api(compose.runtime); implementation(compose.foundation)
+        api(compose.ui); implementation(compose.animation)
+        implementation(compose.components.resources)
     }; commonTest.dependencies { implementation(kotlin("test")) } }
 }
 android { namespace = "dev.composetab.ui"; compileSdk = 35; defaultConfig { minSdk = 24 } }
+
+compose.resources { packageOfResClass = "dev.composetab.ui.resources" }
+
+publishing {
+    repositories {
+        maven { name = "Build"; url = layout.buildDirectory.dir("repository").get().asFile.toURI() }
+    }
+    publications.withType<MavenPublication>().configureEach {
+        pom {
+            name.set(project.name)
+            description.set("UI-only Compose Multiplatform music notation and tablature")
+            url.set("https://github.com/romankolov/compose-tab")
+        }
+    }
+}

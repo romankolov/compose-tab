@@ -2,7 +2,6 @@ name: Build, test and capture
 on:
   push:
     branches: [main, 'arena/**']
-  pull_request:
   workflow_dispatch:
 permissions:
   contents: write
@@ -34,15 +33,23 @@ jobs:
           gh pr comment 1 --body-file diagnostic.md
       - name: Capture real desktop windows
         run: |
-          mkdir -p screenshots
+          mkdir -p docs/screenshots
           for view in both tab selected; do
-            timeout 120s xvfb-run -a -s '-screen 0 1280x900x24' ./gradlew :sample:run --args="--screenshot=$PWD/screenshots/$view.png --view=$view"
+            timeout 120s xvfb-run -a -s '-screen 0 1280x900x24' ./gradlew :sample:run --args="--screenshot=$PWD/docs/screenshots/$view.png --view=$view"
           done
+      - name: Attach captures to this branch
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/heads/arena/')
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add docs/screenshots/*.png
+          git diff --cached --quiet || git commit -m "docs: attach CI desktop screenshots [skip ci]"
+          git push origin HEAD:${{ github.ref_name }}
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: desktop-screenshots
-          path: screenshots/*.png
+          path: docs/screenshots/*.png
           if-no-files-found: warn
       - uses: actions/upload-artifact@v4
         with:
