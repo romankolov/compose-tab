@@ -23,13 +23,13 @@ jobs:
       - name: Test libraries and assemble Android and Desktop
         run: |
           set -o pipefail
-          ./gradlew :score-model:desktopTest :score-ui:desktopTest :sample:assembleDebug :sample:desktopJar --stacktrace 2>&1 | tee build-log.txt
+          ./gradlew :score-model:desktopTest :score-ui:desktopTest :sample:assembleDebug :sample:desktopJar --console=plain 2>&1 | tee build-log.txt
       - name: Report build failure on PR
         if: failure()
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          { echo '### CI diagnostics: Desktop / Android'; echo '```text'; tail -150 build-log.txt; echo '```'; } > diagnostic.md
+          { echo '### CI diagnostics: Desktop / Android'; echo '```text'; head -120 build-log.txt; tail -60 build-log.txt; echo '```'; } > diagnostic.md
           gh pr comment 1 --body-file diagnostic.md
       - name: Capture real desktop windows
         run: |
@@ -72,7 +72,7 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
       - run: |
           set -o pipefail
-          ./gradlew :sample:linkDebugFrameworkIosSimulatorArm64 --stacktrace 2>&1 | tee build-log.txt
+          ./gradlew :sample:linkDebugFrameworkIosSimulatorArm64 --console=plain 2>&1 | tee build-log.txt
       - uses: actions/upload-artifact@v4
         with:
           name: ios-simulator-framework
@@ -82,5 +82,5 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          { echo '### CI diagnostics: iOS'; echo '```text'; tail -150 build-log.txt; echo '```'; } > diagnostic.md
+          { echo '### CI diagnostics: iOS'; echo '```text'; head -120 build-log.txt; tail -60 build-log.txt; echo '```'; } > diagnostic.md
           gh pr comment 1 --body-file diagnostic.md
