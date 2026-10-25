@@ -112,7 +112,7 @@ jobs:
           script: |
             adb shell mkdir -p /sdcard/Download
             adb push sample/src/commonMain/composeResources/files/original-study.gp4 /sdcard/Download/original-study.gp4
-            ./gradlew :sample:connectedDebugAndroidTest --console=plain
+            bash -o pipefail -c './gradlew :sample:connectedDebugAndroidTest --console=plain 2>&1 | tee android-build-log.txt'
             mkdir -p docs/screenshots
             adb pull /sdcard/Android/data/dev.composetab.sample/files/android-playing.png docs/screenshots/android-playing.png
       - uses: actions/upload-artifact@v4
@@ -120,6 +120,7 @@ jobs:
         with:
           name: android-device-verification
           path: |
+            android-build-log.txt
             sample/build/reports/androidTests/
             sample/build/outputs/androidTest-results/
             docs/screenshots/android-playing.png
@@ -129,7 +130,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           PR=$(gh pr list --head "${{ github.ref_name }}" --state open --json number --jq '.[0].number // empty')
-          if [ -n "$PR" ]; then gh pr comment "$PR" --body "Android emulator validation failed in https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}; inspect the android-device-verification artifact and job log."; fi
+          { echo '### Android emulator validation'; echo 'https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}'; echo '```text'; tail -90 android-build-log.txt || true; echo '```'; } > android-diagnostic.md
+          if [ -n "$PR" ]; then gh pr comment "$PR" --body-file android-diagnostic.md; fi
   ios:
     runs-on: macos-14
     timeout-minutes: 30

@@ -28,7 +28,7 @@ class AndroidMidiTransport(private val context: Context) : SampleTransport {
     private var ready = false
     private var closed = false
     private var seeking = false
-    private val focusListener = AudioManager.OnAudioFocusChangeListener { change -> if (change < 0) pause() }
+    private val focusListener: AudioManager.OnAudioFocusChangeListener = AudioManager.OnAudioFocusChangeListener { change -> if (change < 0) pause() }
     private val poll = object : Runnable {
         override fun run() {
             if (closed) return
@@ -95,7 +95,7 @@ class AndroidMidiTransport(private val context: Context) : SampleTransport {
         }
     }
     @Suppress("DEPRECATION") // Compatible audio-focus API for the sample's minSdk 24.
-    override fun play() = onMain {
+    override fun play(): Unit = onMain {
         val p = player
         if (ready && p != null) {
             if (audioManager.requestAudioFocus(focusListener, AudioManager.STREAM_MUSIC, AudioManager.AUDIOFOCUS_GAIN) == AudioManager.AUDIOFOCUS_REQUEST_GRANTED) {
@@ -104,13 +104,13 @@ class AndroidMidiTransport(private val context: Context) : SampleTransport {
             } else mutableStatus.value = mutableStatus.value.copy(message = "Audio focus unavailable; try Play again")
         }
     }
-    override fun pause() = onMain {
+    override fun pause(): Unit = onMain {
         if (ready) { player?.takeIf { it.isPlaying }?.pause(); updatePosition() }
         @Suppress("DEPRECATION")
         audioManager.abandonAudioFocus(focusListener)
     }
-    override fun stop() = onMain { pause(); seek(0.0) }
-    override fun seek(quarter: Double) = onMain {
+    override fun stop(): Unit = onMain { pause(); seek(0.0) }
+    override fun seek(quarter: Double): Unit = onMain {
         val p = player
         if (ready && p != null && quarter.isFinite()) {
             val q = quarter.coerceIn(0.0, mutableStatus.value.durationQuarters)
@@ -119,7 +119,7 @@ class AndroidMidiTransport(private val context: Context) : SampleTransport {
             p.seekTo((clock?.millisecondsAt(q) ?: 0.0).toInt().coerceIn(0, p.duration))
         }
     }
-    override fun close() = onMain {
+    override fun close(): Unit = onMain {
         closed = true; handler.removeCallbacks(poll); releasePlayer(); clock = null
         mutableStatus.value = mutableStatus.value.copy(playing = false, audioAvailable = false, message = "Player closed")
     }
