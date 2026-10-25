@@ -28,4 +28,10 @@ class ScoreTimelineTest {
         val moments = List(3) { ScoreMoment("t", "m", "b", it.toDouble(), 1.0, setOf("n")) }
         assertEquals("b", ScoreTimeline(moments).at(2.5).positions.single().beatId)
     }
+    @Test fun documentRejectsBrokenDecoderReferences() {
+        val score = ScoreData("Empty", tracks = emptyList())
+        assertFailsWith<IllegalArgumentException> {
+            ScoreDocument(score, ScoreTimeline(listOf(ScoreMoment("missing", "m", "b", 0.0, 1.0, emptySet()))))
+        }
+    }
 }

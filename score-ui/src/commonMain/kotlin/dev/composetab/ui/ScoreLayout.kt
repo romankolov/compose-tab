@@ -22,7 +22,9 @@ internal data class ScoreLayout(
 
     /** Binary search each vertically visible row; no whole-score scan on each frame. */
     fun visibleMeasures(left: Float, top: Float, right: Float, bottom: Float): List<PlacedMeasure> = buildList {
-        rows.forEach { row ->
+        val firstRow = (floor((top - 70f) / rowHeight).toInt() - 1).coerceIn(0, rows.size)
+        val lastRow = (floor((bottom - 18f) / rowHeight).toInt() + 2).coerceIn(firstRow, rows.size)
+        rows.subList(firstRow, lastRow).forEach { row ->
             if (row.isEmpty() || row.first().y + rowHeight < top || row.first().y - 52 > bottom) return@forEach
             var low = 0
             var high = row.size
@@ -117,7 +119,7 @@ internal fun layoutScore(data: ScoreData, style: ScoreStyle, viewportWidth: Floa
                         target(y + (track.tuning.size - 1) * style.lineSpacing + 50f, true)
                 }
                 PlacedBeat(beat, bx, onset)
-            }
+            }.sortedBy { it.onset }
             val highest = measure.beats.flatMap { it.notes }.maxOfOrNull { it.staffStep } ?: 0
             val beamY = minOf(y - 12, y + 4 * style.lineSpacing - highest * style.lineSpacing / 2 - 28)
             PlacedMeasure(track, measure, x, y, beats, width, beamY, beamSegments(beats, measure.time), targets, x == 32f)

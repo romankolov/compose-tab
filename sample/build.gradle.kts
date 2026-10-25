@@ -15,6 +15,7 @@ kotlin {
             implementation(compose.components.resources)
         }
         androidMain.dependencies { implementation("androidx.activity:activity-compose:1.10.1") }
+        commonTest.dependencies { implementation(kotlin("test")) }
         getByName("desktopMain").dependencies { implementation(compose.desktop.currentOs) }
     }
 }

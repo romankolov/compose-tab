@@ -55,4 +55,27 @@ class ScoreInteractionTest {
         compose.onNodeWithTag("score").performTouchInput { click(Offset(580.dp.toPx(), 300.dp.toPx())) }
         compose.runOnIdle { assertEquals(ScoreEvent.SelectionCleared, events.last()) }
     }
+    @Test fun wrappedSystemsHitTestAndRevealExternalCursor() {
+        val wrapped = ScoreData("Wrapped", tracks = listOf(Track("t", "Guitar", measures = List(6) { index ->
+            Measure("m$index", index + 1, beats = listOf(Beat("b$index", notes = listOf(Note("n$index", 64, 1, 0, 0)))))
+        })))
+        val state = ScoreState(wrapped)
+        val style = ScoreStyle(layoutMode = ScoreLayoutMode.Vertical)
+        val events = mutableListOf<ScoreEvent>()
+        val marks = mutableListOf<HighlightKind>()
+        val target = layoutScore(wrapped, style, 650f).targets.first { it.event.noteId == "n2" && !it.event.tablature }.bounds.center
+        compose.setContent {
+            ScoreComposable(state, Modifier.size(650.dp, 400.dp).testTag("wrapped"), style, events::add,
+                onDrawHighlight = { marks += it.kind; drawScoreHighlight(it) })
+        }
+        compose.onNodeWithTag("wrapped").performTouchInput { click(Offset(target.x.dp.toPx(), target.y.dp.toPx())) }
+        compose.runOnIdle { assertEquals("n2", state.selectedNoteId) }
+        compose.runOnIdle { state.setPlayhead("b5", .5f) }
+        compose.waitForIdle()
+        compose.runOnIdle {
+            assertTrue(state.verticalScroll > 0f)
+            assertEquals("n2", state.selectedNoteId) // Player moves independently of selection.
+            assertTrue(HighlightKind.Playhead in marks)
+        }
+    }
 }

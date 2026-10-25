@@ -12,6 +12,8 @@ import java.util.concurrent.TimeUnit
 import javax.sound.midi.MidiSystem
 import javax.sound.midi.Sequencer
 import javax.sound.midi.Synthesizer
+import javax.sound.midi.ShortMessage
+import javax.sound.midi.Sequence
 import javax.swing.JFileChooser
 import javax.swing.filechooser.FileNameExtensionFilter
 import java.net.HttpURLConnection
@@ -84,7 +86,7 @@ class DesktopSampleServices(private val input: String? = null) : SampleServices 
 
 /** General MIDI reference, not part of the library. Uses the sequencer's actual tick
  * position (including tempo changes), not a separate coroutine approximation of audio. */
-class DesktopMidiTransport : SampleTransport {
+class DesktopMidiTransport(private val enableAudio: Boolean = System.getenv("COMPOSE_TAB_SILENT") != "1") : SampleTransport {
     private val mutableStatus = MutableStateFlow(TransportStatus())
     override val status = mutableStatus.asStateFlow()
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
@@ -92,6 +94,35 @@ class DesktopMidiTransport : SampleTransport {
     private var sequencer: Sequencer? = null
     private var synth: Synthesizer? = null
     private val lock = Any()
+    private data class HeldNote(val channel: Int, val pitch: Int, val velocity: Int, val start: Long, val end: Long)
+    private var heldNotes: List<HeldNote> = emptyList()
+    private var programs: Map<Int, Int> = emptyMap()
+    private fun indexNotes(sequence: Sequence) {
+        val pending = mutableMapOf<Pair<Int, Int>, MutableList<Pair<Long, Int>>>()
+        val notes = mutableListOf<HeldNote>()
+        val patches = mutableMapOf<Int, Int>()
+        val events = sequence.tracks.flatMap { track -> (0 until track.size()).map { track[it] } }.sortedBy { it.tick }
+        events.forEach { event ->
+            val message = event.message as? ShortMessage ?: return@forEach
+            val key = message.channel to message.data1
+            if (message.command == ShortMessage.PROGRAM_CHANGE) patches[message.channel] = message.data1
+            if (message.command == ShortMessage.NOTE_ON && message.data2 > 0) pending.getOrPut(key) { mutableListOf() }.add(event.tick to message.data2)
+            else if (message.command == ShortMessage.NOTE_OFF || (message.command == ShortMessage.NOTE_ON && message.data2 == 0)) {
+                val active = pending[key]
+                if (!active.isNullOrEmpty()) {
+                    val start = active.removeAt(0)
+                    notes += HeldNote(key.first, key.second, start.second, start.first, event.tick)
+                }
+            }
+        }
+        heldNotes = notes
+        programs = patches
+    }
+    private fun chaseHeldNotes(tick: Long) {
+        val channels = synth?.channels ?: return
+        programs.forEach { (channel, patch) -> channels.getOrNull(channel)?.programChange(patch) }
+        heldNotes.filter { it.start < tick && tick < it.end }.forEach { note -> channels.getOrNull(note.channel)?.noteOn(note.pitch, note.velocity) }
+    }
 
     override suspend fun load(song: SampleSong) = withContext(Dispatchers.IO) {
         synchronized(lock) {
@@ -100,15 +131,16 @@ class DesktopMidiTransport : SampleTransport {
             val player = MidiSystem.getSequencer(false)
             player.open()
             try {
-                if (System.getenv("COMPOSE_TAB_SILENT") != "1") {
+                if (enableAudio) {
                     val instrument = MidiSystem.getSynthesizer()
                     try { instrument.open(); player.transmitter.receiver = instrument.receiver; synth = instrument }
                     catch (_: Exception) { instrument.close() }
                 }
                 player.sequence = MidiSystem.getSequence(ByteArrayInputStream(song.midi))
+                indexNotes(player.sequence)
                 sequencer = player
                 mutableStatus.value = TransportStatus(durationQuarters = player.tickLength.toDouble() / player.sequence.resolution,
-                    audioAvailable = synth != null, message = if (synth != null) "General MIDI audio" else "No audio device — silent cursor preview")
+                    audioAvailable = synth != null, message = if (synth != null) "General MIDI audio" else "Silent cursor preview — audio disabled or unavailable")
             } catch (error: Exception) { player.close(); throw error }
         }
         polling = scope.launch {
@@ -123,12 +155,20 @@ class DesktopMidiTransport : SampleTransport {
             }
         }
     }
-    override fun play() = synchronized(lock) { sequencer?.let { if (it.tickPosition >= it.tickLength) it.tickPosition = 0; it.start() }; Unit }
+    override fun play() = synchronized(lock) {
+        sequencer?.let { if (it.tickPosition >= it.tickLength) it.tickPosition = 0; silence(); chaseHeldNotes(it.tickPosition); it.start() }
+        Unit
+    }
     override fun pause() = synchronized(lock) { sequencer?.stop(); silence(); Unit }
     override fun stop() = synchronized(lock) { sequencer?.stop(); sequencer?.tickPosition = 0; silence(); Unit }
     override fun seek(quarter: Double) = synchronized(lock) {
-        if (quarter.isFinite()) sequencer?.let { p -> p.tickPosition = (quarter.coerceAtLeast(0.0) * p.sequence.resolution).toLong().coerceAtMost(p.tickLength) }
-        silence(); Unit
+        if (quarter.isFinite()) sequencer?.let { p ->
+            val running = p.isRunning
+            p.stop(); silence()
+            p.tickPosition = (quarter.coerceAtLeast(0.0) * p.sequence.resolution).toLong().coerceAtMost(p.tickLength)
+            if (running) { chaseHeldNotes(p.tickPosition); p.start() }
+        }
+        Unit
     }
     private fun silence() { synth?.channels?.forEach { it?.allSoundOff() } }
     override fun close() { polling?.cancel(); scope.cancel(); synchronized(lock) { sequencer?.close(); synth?.close(); sequencer = null; synth = null } }

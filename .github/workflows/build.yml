@@ -39,7 +39,7 @@ jobs:
       - name: Test libraries and assemble Android and Desktop
         run: |
           set -o pipefail
-          xvfb-run -a ./gradlew :score-model:desktopTest :score-ui:desktopTest :sample:assembleDebug :sample:desktopJar :sample:createDistributable --console=plain 2>&1 | tee -a build-log.txt
+          xvfb-run -a ./gradlew :score-model:desktopTest :score-ui:desktopTest :sample:desktopTest :sample:assembleDebug :sample:desktopJar :sample:createDistributable --console=plain 2>&1 | tee -a build-log.txt
       - name: Capture real desktop windows
         run: |
           mkdir -p docs/screenshots

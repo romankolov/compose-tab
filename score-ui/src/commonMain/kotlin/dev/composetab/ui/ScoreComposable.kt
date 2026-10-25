@@ -55,7 +55,7 @@ fun ScoreComposable(
     val focus = remember { FocusRequester() }
     val beatLocations = remember(layout) { layout.measures.flatMap { m -> m.beats.map { it.beat.id to Offset(it.x, m.y) } }.toMap() }
     val noteLocations = remember(layout) { layout.targets.associate { it.event.noteId to it.bounds.center } }
-    LaunchedEffect(layout, viewport, state.zoom, state.revealRequest, state.playback, state.followPlayback) {
+    LaunchedEffect(layout, viewport, state.zoom, state.revealRequest, state.playback?.positions?.map { it.beatId }, state.playback?.noteIds, state.followPlayback) {
         if (viewport.width == 0 || viewport.height == 0) return@LaunchedEffect
         val width = viewport.width / (density * state.zoom)
         val height = viewport.height / (density * state.zoom)
