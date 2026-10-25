@@ -1,147 +1,260 @@
-# Compose Tab
+# Compose Tab · 0.3.0
 
-Version **0.2.0** · A UI-only Compose Multiplatform library for interactive guitar scores. Shared Kotlin code targets **Android, iOS and Desktop**. No player, audio engine, file parser or decoder dependency is included in the library.
+A UI-only Compose Multiplatform library for interactive music scores and guitar
+ tablature on **Android, iOS and Desktop**. The library has **no decoder, player,
+ audio device, file I/O or playback clock**. The separate sample demonstrates
+real GP4 decoding and a Desktop General MIDI player.
 
-## Modules
+## Start with your decoder
 
-```text
-score-model/   Plain Kotlin score values and validation; no Compose dependencies
-score-ui/      Reactive state, pure layout geometry, Canvas rendering and hit testing
-sample/        Independent consumer app, mock decoder, adapter and score studio screen
-  src/commonMain/   Gp5Decoder → DecodedSong → ScoreData → ScoreComposable
-  src/androidMain/ MainActivity + manifest
-  src/desktopMain/ Desktop entry point
-  src/iosMain/     MainViewController for a Swift host
+```kotlin
+// Your decoder produces lightweight values. Keep your own IDs stable across edits.
+val document = ScoreDocument(
+    ScoreData("Study", tracks = listOf(
+        Track("guitar", "Acoustic guitar", measures = listOf(
+            Measure("bar-1", 1, beats = listOf(
+                Beat("beat-1", Duration.Quarter, notes = listOf(
+                    Note("note-1", midi = 64, string = 1, fret = 0, staffStep = 0)
+                ))
+            ))
+        ))
+    ))
+)
+val state = rememberScoreState(document)
+VerticalScore(state, Modifier.fillMaxSize())
 ```
 
-The sample has a warm paper/green theme, notation/tab visibility controls, an animated zoom slider, drag/pinch navigation and an animated selection inspector. It intentionally has no playback controls. Night-paper styling and a pitch/string/fret inspector demonstrate host-driven customization.
+`staffStep` is diatonic distance above the bottom treble E4 line; MIDI alone does
+not determine enharmonic spelling. Tuning lists use one-based string order
+(high E first for standard guitar). An empty note list is a rest; a beat's notes
+sound together. Values/lists must be treated as immutable.
 
-## Run
+For an existing decoder, implement the tiny generic boundary:
 
-Prerequisites: JDK 17+, Android SDK 35 (the included build config configures Android targets), network access to Gradle/Google/Maven repositories. iOS requires macOS and Xcode.
+```kotlin
+val adapter = ScoreAdapter<MyDecodedSong> { decoded ->
+    ScoreDocument(
+        data = decoded.toScoreData(),  // Your mapping; no inheritance required
+        timeline = decoded.toScoreTimeline(), // Optional: exact offsets / repeat passes
+    )
+}
+val state = rememberScoreState() // Uncontrolled state for asynchronous loading
+LaunchedEffect(decodedSong) {
+    state.submit(decodedSong, adapter, resetViewport = true)
+}
+```
+
+`rememberScoreState(data)` and `rememberScoreState(document)` are **controlled**
+by the supplied value; use the no-argument variant when calling `submit` yourself.
+Do decoding/I/O off the UI thread, then submit on the UI thread. No Compose
+classes are needed in the decoder. `sample/Gp4DocumentAdapter.kt` is a real,
+independent mapping example, not a dependency required by consumers.
+
+## Host-controlled playback pointers
+
+There are no timers hidden inside `ScoreComposable`. Feed the view from the
+**same clock used by your audio engine**, rather than maintaining a second timer:
+
+```kotlin
+// Quarters are musical time, not seconds. Use your decoder/player's tempo map.
+state.setPlaybackQuarter(playerQuarterPosition)
+
+// Or provide exact positions/active notes directly, including chords or several tracks:
+state.setPlaybackPosition(ScorePlaybackPosition(
+    positions = listOf(ScorePosition("beat-1", fraction = 0.45f)),
+    noteIds = setOf("note-1", "note-2"),
+))
+state.setPlayingNotes("note-1", "note-2")
+state.setPlayhead("beat-1", fraction = 0.6f)
+state.clearPlayback() // Does not clear selection
+```
+
+`ScoreTimeline` is a pure timing index. Its intervals are start-inclusive,
+end-exclusive; `at(quarter)` returns simultaneous active notes and beat fractions.
+The default index uses measures/time signatures and sequential beats.
+`Beat.offsetQuarters`, `Beat.durationScale`, and `Measure.lengthQuarters` retain
+precise decoder timings, tuplets and pickups. For repeat-aware playback, supply
+`ScoreMoment` entries with expanded start times but the **same notated IDs** on
+each repeat pass. `ScoreDocument` validates timeline references against the model.
+
+## Two layout modes
+
+```kotlin
+HorizontalScore(state) // Continuous strip, pans horizontally to the end
+VerticalScore(state)   // Fits whole measures into viewport-width systems, stacks systems
+// Equivalent lower-level configuration:
+ScoreComposable(state, style = ScoreStyle(layoutMode = ScoreLayoutMode.Vertical))
+```
+
+Vertical layout reflows on width and zoom changes. Measures share columns across
+tracks; every system stacks the tracks in score order. Hit testing, selection,
+playback pointers and follow-scroll use the same wrapped geometry. Minimum
+logical system width is 204 dp; at extreme zoom on a narrow device, zoom out or
+pan. Very dense bars are compressed to fit a system and may need a wider viewport
+or tab-only mode; a full engraving collision solver is not provided.
+
+## Customize selection, active notes and the cursor independently
+
+```kotlin
+val style = ScoreStyle(
+    selectedHighlight = ScoreHighlightStyle(HighlightShape.Rectangle, Color(0x55347B60)),
+    playingHighlight = ScoreHighlightStyle(HighlightShape.BeatColumn, Color(0x443E9DD0)),
+    playhead = ScoreHighlightStyle(HighlightShape.VerticalLine, Color.Blue, lineWidth = 2f),
+)
+ScoreComposable(state, style = style)
+
+state.selectNotes("note-1", "note-2")
+state.selectedNoteId = "note-1" // Single-selection shorthand, independent of playback
+state.followPlayback = true
+state.revealNote("note-1")
+state.revealBeat("beat-1")
+```
+
+Shapes: `None`, `NoteHead`, `Rectangle`, `VerticalLine`, `BeatColumn`.
+For completely custom drawing, `onDrawHighlight` receives a `ScoreHighlight`
+(kind, score-space bounds, appearance, stable IDs). This **replaces** built-in
+highlight drawing; call `drawScoreHighlight(highlight)` for default rendering
+of kinds you do not customize. `onDrawEffect` is an additive articulation hook.
+Style also controls paper/ink/colors, line/track spacing, measure width,
+notation/tab visibility and tab-only rhythmic notation.
+
+The view supports drag/pinch, wheel/trackpad pan, Ctrl+wheel zoom, arrow-key note
+navigation, Escape to clear selection, and +/− zoom. Click to focus the score.
+Manual pan disables follow mode; re-enable `state.followPlayback` to resume it.
+Next/previous/zoom accessibility actions and score descriptions are supplied;
+a full per-note screen-reader tree remains future work.
+
+## Selection events and seeking
+
+```kotlin
+ScoreComposable(state, onEvent = { event ->
+    when (event) {
+        is ScoreEvent.NoteSelected -> {
+            val model = state.document.index.notes[event.noteId] // Note + beat/measure/track
+            // Seek your player using event.beatId and your own timing/repeat policy.
+        }
+        ScoreEvent.SelectionCleared -> Unit
+        is ScoreEvent.ViewportChanged -> Unit
+    }
+})
+```
+
+Staff heads, fret numbers and tab-only rhythm heads are selectable. IDs are
+globally unique. Selection state can hold multiple note IDs, while default pointer
+clicks select one. Replacement documents prune removed selections and reset the
+playback snapshot; the host should resend its current position after an edit.
+
+## Run the real GP4 / playback sample
+
+Prerequisites: JDK 17, Android SDK 35 for this build's Android targets; macOS/Xcode
+for iOS. **Desktop GP4 import additionally needs Python 3.10+** with the two pinned
+sample dependencies. They are intentionally outside the library and Java runtime:
 
 ```sh
-./gradlew :sample:run                      # Desktop
-./gradlew :sample:assembleDebug            # Android APK
+python3 -m venv .venv
+.venv/bin/python -m pip install -r sample/tools/requirements.txt
+COMPOSE_TAB_PYTHON="$PWD/.venv/bin/python" ./gradlew :sample:run
+```
+
+Windows: use `.venv\Scripts\python.exe` and set `COMPOSE_TAB_PYTHON` accordingly.
+For a packaged Desktop app, set this variable to the **absolute** interpreter path.
+It must have `PyGuitarPro==0.11` and `mido==1.3.3` installed. The Python bridge
+has a file-size limit, a decoder process timeout, explicit schema validation and
+error reporting. It is a real GP4 parser, not an extension/header-only fake.
+
+- **Open GP4** imports a local file using the real parser.
+- **Load requested tab** retrieves the supplied
+  [Nothing Else Matters GP4](https://gprotab.net/en/tabs/metallica/nothing-else-matters?download),
+  decodes it off the UI thread, and displays its pitched tracks. If the source host
+  blocks a download, save that link in your browser and use **Open GP4**.
+- Play/Pause/Stop and scrubbing use Java MIDI's actual sequencer tick position,
+  including embedded tempo changes. The generated MIDI expands repeat/alternate
+  ending passes; those passes reference original notated IDs for the UI.
+- Choose a track, layout, highlight styles and follow mode in the toolbar.
+- Audio uses the operating system's General MIDI synthesizer. When there is no
+  audio device (e.g. CI), the UI explicitly says **silent cursor preview**. No
+  sound output is claimed in that case. Guitar articulations are simplified in
+  playback; this is not a physical guitar synthesizer.
+
+Optional preparation (also used by CI):
+
+```sh
+.venv/bin/python sample/tools/prepare_gp4.py --fetch
+# Downloads into ignored sample/local/nothing-else-matters.gp4, auto-loaded on Desktop.
+./gradlew :sample:run --args="--gp4=/absolute/path/to/song.gp4"
+```
+
+The copyrighted tab is **not bundled or committed**. The default distributable
+contains a clearly titled, original generated GP4 exercise. Android/iOS show a
+predecoded JSON version of that original exercise; **runtime GP4 import and MIDI
+playback are Desktop reference features**, not falsely enabled mobile controls.
+Replace `SampleServices` with native decoder/audio implementations in your app.
+
+## Modules and verification
+
+```text
+score-model/   Kotlin values, ScoreAdapter, ScoreDocument, ScoreIndex, ScoreTimeline
+score-ui/      Reactive state, horizontal/wrapped layout, Canvas, highlights, input
+sample/        Consumer UI, GP4 wire mapper, Python bridge, Desktop MIDI transport
+sample/tools/  Decoder requirements, fixture generator/downloader and integration tests
+```
+
+```sh
 ./gradlew :score-model:desktopTest :score-ui:desktopTest
+.venv/bin/python sample/tools/test_gp4.py
+./gradlew :sample:assembleDebug
+./gradlew :sample:createDistributable
 ./gradlew :sample:linkDebugFrameworkIosSimulatorArm64  # macOS
 ```
 
-For iOS, embed the generated `ComposeTabSample.framework` in a Swift Xcode app and return `MainViewControllerKt.MainViewController()` from a `UIViewControllerRepresentable`. A SwiftUI host source is provided in `sample/iosApp/ScoreStudioApp.swift`; a generated Xcode project and signing configuration are not included. For local device builds, add a Run Script phase invoking `./gradlew :sample:embedAndSignAppleFrameworkForXcode` from the repository root, disable User Script Sandboxing, and follow Compose Multiplatform framework embedding conventions so bundled font resources are copied too. The Gradle sample is the separate application context; neither library module depends on it.
+[GitHub Actions](https://github.com/romankolov/compose-tab/actions/workflows/build.yml)
+runs unit/Compose pointer-keyboard tests, Python GP4/MIDI tests, attempts the exact
+requested download, builds Android/Desktop, launches Desktop and its packaged
+binary under Xvfb, captures both layout modes and a **moving** cursor, and links
+an iOS simulator framework on macOS. External-host download failures are explicit
+warnings, not mistaken for successful verification of that song. Inspect the run
+logs and screenshot title to distinguish requested-tab vs original-fixture runs.
+Mobile UI is compiled/linked, not physical-device-tested by this workflow.
 
-## GitHub build and real captures
+Screenshots are real captures, not generated mockups:
+[vertical](docs/screenshots/both.png) · [horizontal](docs/screenshots/horizontal.png) ·
+[playing cursor](docs/screenshots/playing.png) · [selection](docs/screenshots/selected.png).
 
-`.github/workflows/build.yml` builds the Android APK and Desktop app, runs model/layout tests and real Compose pointer/keyboard tests under Xvfb, links an iOS simulator framework on macOS, and runs the Desktop application three times to capture real windows. APK, runnable Linux desktop distribution, framework, screenshots, and test reports are downloadable from each successful Actions run. Captures are also attached to this branch in `docs/screenshots/`. Images are produced by `java.awt.Robot`, not generated mockups. The packaged Linux binary is also launched in CI, with a screenshot smoke check; its tarball preserves executable permissions. Physical Android/iOS device testing is still a release requirement.
+## Performance and extension boundaries
 
-The sandbox has no JDK; build validation runs on GitHub-hosted runners. See the PR checks for the verified source revision.
+Layout is memoized independently of selection and clock ticks. Canvas binary
+searches sorted measure bounds within vertically visible systems and draws only
+visible measures. Text layouts are cached. Playback/selection do not rebuild the
+score layout. ID indexes are constructed once per document/layout. Timing lookup
+uses a binary start index and prefix end bounds to retain overlapping notes.
+Whole-score layout/document construction is still synchronous: adapt large
+scores off the UI thread and profile very large documents. Static bitmap tile
+caching is an optional optimization, not an implemented or mandatory cache.
 
-## Public API
+This is a usable interactive score/tab UI, **not a notation-complete publication
+engraver**. Known engraving limits include upward stems, treble clef only, no key
+signatures, full tuplet brackets, slur/tie engraving, printing/pagination, or
+collision resolution for dense chords/voices. Exact timing is preserved even when
+an articulation/engraving is simplified. GP4 decode warnings surface simplified
+effects. Jump signs beyond ordinary repeat/alternate endings are not implemented
+in the sample MIDI exporter. Zoom/selection are not process-restoration state;
+the host can persist them. Review accessibility/device testing before a public app.
 
-```kotlin
-val state = rememberScoreState(scoreData)
-ScoreComposable(
-    state = state,
-    modifier = Modifier.fillMaxSize(),
-    style = ScoreStyle(
-        accent = Color(0xFF347B60),
-        measureWidth = 300f,
-        showStaff = true,
-        showTab = true,
-        showTabRhythm = true,
-    ),
-    onEvent = { event ->
-        when (event) {
-            is ScoreEvent.NoteSelected -> inspectNote(event.noteId)
-            ScoreEvent.SelectionCleared -> clearInspector()
-            is ScoreEvent.ViewportChanged -> Unit
-        }
-    },
-)
-// Controlled by the host UI:
-state.zoomTo(1.25f)
-state.scrollTo(280f)
-state.selectedNoteId = "my-stable-note-id"
-```
+## Consumption and licensing
 
-`rememberScoreState` retains viewport and selection when data changes. Publish replacement data/lists rather than mutating lists in place. Stable IDs preserve selection across edits; clear selection yourself when deleting its note. State mutations should occur on the UI thread. `ScoreState` is not a player clock or decoder session. Pinch and drag update viewport events; direct state mutations are host commands and do not emit events.
-
-## Data contract
-
-`ScoreData → Track → Measure → Beat → Note`, with a sealed `Effect` vocabulary. This hierarchy follows the common score-oriented mental model used by applications such as [TuxGuitar](https://github.com/helge17/tuxguitar); **no TuxGuitar source was copied or linked**.
-
-- Tuning is MIDI pitches in **string order 1..N** (high E first for standard guitar).
-- Note string is one-based; fret is nonnegative; MIDI is 0..127.
-- `staffStep` is diatonic distance above bottom treble E4 (0). Explicit accidentals avoid guessing enharmonic spelling in the renderer.
-- Beats are a sequential, single-voice stream, with quarter-relative durations and optional dots. An empty note list represents a rest. Notes within one beat are simultaneous.
-- IDs are globally unique; constructors reject duplicate IDs, invalid MIDI and invalid time signatures. Layout rejects strings outside the track's tuning.
-- Lists are read-only by convention, not deeply immutable collections. Decoder-specific metadata stays in the adapter.
-
-See `sample/.../DecoderAdapter.kt` for a deliberately small, suspendable decoder interface and explicit mapping. The mock does not parse GP5 bytes. A real decoder adapter should normalize timing and key spelling and report unsupported features rather than silently dropping them. If using TuxGuitar decoding code in a separate app, review its applicable license and platform/JVM dependencies first; it is not a portable commonMain dependency by default.
-
-## Rendering architecture
-
-1. **Model:** score values, with no drawing or platform concepts.
-2. **Layout:** `layoutScore` computes aligned, adaptive measure columns, duration-weighted beat positions with minimum spacing, meter-aware beam segments, and independent staff/tab hit rectangles.
-3. **Canvas:** uses cached geometry; converts logical dp to physical pixels once, applies viewport transforms, and skips off-screen measures before drawing.
-4. **Interaction:** maps input back into score coordinates and emits stable-ID events. Staff note heads and fret numbers both select the same note while reporting which representation was clicked.
-
-The baseline draws staff/tab lines, ledger lines, note heads, chord stems, meter-aware beams/rests, explicit accidentals, dots, repeat markers and illustrative bends/slides/hammer-ons/pull-offs/vibrato/palm mute. Zoom uses a spring; selection details use animated visibility. Dragging remains immediate, avoiding laggy gesture tracking. The host controls all surrounding UI and theme.
-
-### Screenshots from the running Desktop app
-
-![Combined notation and tablature](docs/screenshots/both.png)
-
-[Tab-only view with rhythm](docs/screenshots/tab.png) · [Selected note inspector](docs/screenshots/selected.png)
-
-These are captured automatically by GitHub Actions. The selected-note view uses deterministic sample state so screenshots are reproducible; separate Compose tests perform actual pointer and keyboard input.
-
-### Customization
-
-`ScoreStyle` controls colors, measure width, line spacing, track spacing, representation visibility, and optional tab-only rhythmic notation. Size the canvas via its modifier; no toolbar is forced on consumers. `onDrawEffect` is an additive `DrawScope` hook receiving the effect, anchor and style in logical score coordinates. Add a model effect, handle it in the renderer's exhaustive `when`, or decorate it in the hook. It is not a replacement hook for existing built-in marks.
-
-### Performance and next steps
-
-- Layout is memoized by data/style and is unaffected by selection or viewport changes.
-- Canvas draws only visible measures in both axes; text layouts are cached with `rememberTextMeasurer`.
-- Draw hit targets and notes from the same geometry to prevent independent drift.
-- Visibility and hit lookup binary-search sorted measure bounds per visible track, then inspect only candidate measures. Keyboard navigation flattens targets on demand. Layout itself is whole-score and synchronous: compute incremental layouts off the UI thread for very large documents.
-- Repeated lines are cheap vector primitives. For heavier static engraving, cache per-measure `ImageBitmap` tiles keyed by score revision, style, density and zoom bucket. Keep selection overlays live; evict tiles using an LRU memory budget. Bitmap caching is an optimization design, **not implemented here**, because it can blur during zoom and consume substantial memory.
-
-## Scope / engraving limitations
-
-This is an extensible working implementation scaffold, **not a complete production engraving engine**. In particular:
-
-- One continuous horizontal system per track, no wrapping, pagination or print layout.
-- Beam groups follow simple and compound meter with mixed-duration hooks. Asymmetric meter needs an explicit custom grouping policy. Stems point upward; no collision resolution for chord seconds/accidentals/effects yet.
-- Treble clef only; no key-signature engraving, multi-voice timing, ties, tuplets, grace notes, alternate endings or cross-staff notation yet.
-- Bundled OFL-licensed Bravura SMuFL glyphs render treble clefs, rests and accidentals. Noteheads, stems, beams and effects use vector geometry. Fret numbers use system text. See `THIRD_PARTY_NOTICES.md`.
-- Effect marks are illustrative, not complete GP5 effect semantics. Track height expands for tuning string count; extreme ledger ranges may need host-adjusted track spacing.
-- Touch/pointer drag and pinch, wheel/trackpad pan, Ctrl+wheel zoom, arrow-key note navigation, Escape to clear, and +/− zoom are implemented. Click the score to focus it. Canvas exposes score descriptions and next/previous/zoom accessibility actions; a full per-note semantic tree and screen-reader pitch announcements still need expansion before shipping an accessible editor.
-- Zoom/selection are not saveable across process recreation; the host can persist its own state.
-
-Before release: compile all targets, run the supplied model/layout tests, add screenshot/golden and pointer tests, test physical touch devices and build an accessibility overlay. No audio or file decoding should enter either library module during these extensions.
-
-## Consuming library artifacts
-
-The library modules use `maven-publish` with group `dev.composetab`, version `0.2.0`, including sources, KMP metadata and Android release variants. No Maven Central publication is claimed.
+Use `implementation(project(":score-ui"))`, or publish library modules with
+`maven-publish`, group `dev.composetab`, version `0.3.0`. No Maven Central upload
+is claimed. Publish all needed KMP/platform publications together before using
+`implementation("dev.composetab:score-ui:0.3.0")` from another project.
 
 ```sh
-# Publish all supported targets on macOS with Android SDK + Xcode installed:
-./gradlew :score-model:publishToMavenLocal :score-ui:publishToMavenLocal
-# A desktop-only local build on Linux:
-./gradlew :score-model:publishDesktopPublicationToMavenLocal :score-ui:publishDesktopPublicationToMavenLocal
+./gradlew :score-model:publishToMavenLocal :score-ui:publishToMavenLocal # macOS + SDK/Xcode
 ```
 
-For an app in this repository use `implementation(project(":score-ui"))`. A separately published KMP consumer uses `implementation("dev.composetab:score-ui:0.2.0")`; publish the root KMP and required platform publications together before using that coordinate. An optional `Build` Maven repository writes to each module's `build/repository` for staging. Production repository URL, signing, and credentials should be configured by the maintainer, never embedded in source.
+TuxGuitar is a conceptual object-hierarchy reference; no TuxGuitar source is
+copied. Bravura is bundled under SIL OFL. PyGuitarPro is separately installed
+under LGPL-3.0 and mido under MIT. See [third-party notices](THIRD_PARTY_NOTICES.md).
 
-## Try the packaged sample
-
-From a successful [Actions run](https://github.com/romankolov/compose-tab/actions/workflows/build.yml), download `linux-desktop-app`, extract the artifact ZIP and then `ComposeTabStudio-linux-x64.tar.gz`, and run `ComposeTabStudio/bin/ComposeTabStudio`. It includes its own Java runtime; it needs a Linux graphical session and the normal system graphics libraries. Install the `android-debug` APK using `adb install -r sample-debug.apk` (debug-signed, not a store release). The `ios-simulator-framework` artifact is for an arm64 simulator host, not a standalone installable iOS application.
-
-To package locally: `./gradlew :sample:createDistributable`. To recreate an individual screenshot: `./gradlew :sample:run --args="--screenshot=/absolute/path/capture.png --view=selected"` (views: `both`, `tab`, `selected`).
-
-### Shipping a verified preview
-
-`Ship verified preview` is a manual GitHub workflow. Supply a **successful build run ID from this branch** and a new preview tag. It verifies the run, downloads the already-tested artifacts (rather than rebuilding different binaries), and creates a prerelease attached to that exact source revision. It does not merge the PR, switch branches, upload to Maven Central, or publish to mobile stores.
-
-If the GitHub App cannot dispatch workflows, the same verified-artifact shipping path can be triggered by an explicit `ship: verified preview …` commit updating `.github/preview-release.json` on the working branch. Ordinary pushes do **not** publish a release. The request must name a successful build from this branch and a new `vX.Y.Z-preview.N` tag; existing releases are not overwritten.
+The verified-preview shipping workflow in `.github/workflows/release-preview.yml`
+accepts a successful build run from the same branch and attaches **those exact
+artifacts** to a preview tag. It does not merge the PR or publish to mobile stores.

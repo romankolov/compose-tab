@@ -83,6 +83,10 @@ def decode(path):
                                 effects.append({'type': label})
                         if e.grace or e.harmonic or e.trill or e.tremoloPicking:
                             warnings.add('Grace notes, harmonics, trills and tremolo picking are decoded but not fully engraved/synthesized.')
+                        if note.type.name == 'tie':
+                            warnings.add('Ties are sustained in MIDI; tie arcs are not engraved by this sample.')
+                        if note.type.name == 'dead':
+                            warnings.add('Dead-note engraving and synthesis are simplified.')
                         midi = note.realValue
                         if not 0 <= midi <= 127:
                             raise ValueError(f'Pitch outside MIDI range in track {ti + 1}, measure {mi + 1}')
@@ -95,8 +99,6 @@ def decode(path):
                     beats.append({'id': bid, 'duration': base, 'dotted': beat.duration.isDotted,
                                   'offset': onset, 'scale': duration / visual_duration, 'notes': notes})
                     source_beats[bid] = beat
-            if any(b.effect.mixTableChange and b.effect.mixTableChange.tempo.value >= 0 for v in measure.voices for b in v.beats):
-                pass  # Tempo changes are added to the MIDI conductor below.
             measures.append({'id': mid, 'number': mi + 1, 'numerator': measure.header.timeSignature.numerator,
                              'denominator': measure.header.timeSignature.denominator.value,
                              'length': measure.header.length / PPQ, 'repeatStart': measure.header.isRepeatOpen,
@@ -127,7 +129,7 @@ def decode(path):
                                 'beatId': beat['id'], 'start': start / PPQ, 'duration': duration / PPQ,
                                 'noteIds': [n['id'] for n in beat['notes']]})
                 change = original.effect.mixTableChange
-                if change and change.tempo.value > 0:
+                if change and change.tempo is not None and change.tempo.value > 0:
                     conductor_events.append((start, mido.MetaMessage('set_tempo', tempo=mido.bpm2tempo(change.tempo.value))))
                 for note in beat['notes']:
                     n = source_notes[note['id']]

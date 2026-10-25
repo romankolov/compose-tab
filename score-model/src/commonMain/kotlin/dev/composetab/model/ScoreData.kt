@@ -39,6 +39,7 @@ data class Beat(
     init {
         require(offsetQuarters == null || (offsetQuarters.isFinite() && offsetQuarters >= 0))
         require(durationScale.isFinite() && durationScale > 0)
+        require(durationQuarters.isFinite() && durationQuarters > 0)
         require(notes.map { it.string }.distinct().size == notes.size) { "A beat cannot contain two frets on the same string" } }
     val isRest: Boolean get() = notes.isEmpty()
     val durationQuarters: Float get() = duration.quarters * (if (dotted) 1.5f else 1f) * durationScale.toFloat()

@@ -35,10 +35,19 @@ internal fun measureHighlights(
     }
     addNotes(selected, HighlightKind.Selection, style.selectedHighlight)
     addNotes(playback?.noteIds.orEmpty(), HighlightKind.Playing, style.playingHighlight)
+    val cursorXs = mutableListOf<Float>()
     if (style.playhead.shape != HighlightShape.None) playback?.positions.orEmpty().forEach { position ->
         placed.beats.firstOrNull { it.beat.id == position.beatId }?.let { beat ->
             val nextX = placed.beats.firstOrNull { it.onset > beat.onset }?.x ?: placed.x + placed.width - 12f
-            val x = beat.x + (nextX - beat.x) * position.fraction
+            val quarter = beat.onset + beat.beat.durationQuarters * position.fraction
+            val leftBeat = placed.beats.lastOrNull { it.onset <= quarter } ?: beat
+            val rightBeat = placed.beats.firstOrNull { it.onset > quarter }
+            val endTime = rightBeat?.onset ?: maxOf(leftBeat.onset + leftBeat.beat.durationQuarters, placed.measure.lengthQuarters?.toFloat() ?: 0f)
+            val endX = rightBeat?.x ?: placed.x + placed.width - 12f
+            val fraction = ((quarter - leftBeat.onset) / (endTime - leftBeat.onset).coerceAtLeast(.0001f)).coerceIn(0f, 1f)
+            val x = leftBeat.x + (endX - leftBeat.x) * fraction
+            if (cursorXs.any { kotlin.math.abs(it - x) < .5f }) return@let
+            cursorXs += x
             val bounds = if (style.playhead.shape == HighlightShape.BeatColumn)
                 Rect(beat.x - 14f, placed.y - 16f, nextX - 14f, bottom)
             else Rect(x - style.playhead.lineWidth / 2, placed.y - 16f, x + style.playhead.lineWidth / 2, bottom)
