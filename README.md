@@ -1,1 +1,109 @@
-# compose-tab
+# Compose Tab
+
+A UI-only Compose Multiplatform foundation for interactive guitar scores. Shared Kotlin code targets **Android, iOS and Desktop**. No player, audio engine, file parser or decoder dependency is included in the library.
+
+## Modules
+
+```text
+score-model/   Plain Kotlin score values and validation; no Compose dependencies
+score-ui/      Reactive state, pure layout geometry, Canvas rendering and hit testing
+sample/        Independent consumer app, mock decoder, adapter and score studio screen
+  src/commonMain/   Gp5Decoder → DecodedSong → ScoreData → ScoreComposable
+  src/androidMain/ MainActivity + manifest
+  src/desktopMain/ Desktop entry point
+  src/iosMain/     MainViewController for a Swift host
+```
+
+The sample has a warm paper/green theme, notation/tab visibility controls, an animated zoom slider, drag/pinch navigation and an animated selection inspector. It intentionally has no playback controls.
+
+## Run
+
+Prerequisites: JDK 17+, Android SDK 35 (the included build config configures Android targets), network access to Gradle/Google/Maven repositories. iOS requires macOS and Xcode.
+
+```sh
+./gradlew :sample:run                      # Desktop
+./gradlew :sample:assembleDebug            # Android APK
+./gradlew :score-model:desktopTest :score-ui:desktopTest
+./gradlew :sample:linkDebugFrameworkIosSimulatorArm64  # macOS
+```
+
+For iOS, embed the generated `ComposeTabSample.framework` in a Swift Xcode app and return `MainViewControllerKt.MainViewController()` from a `UIViewControllerRepresentable`. A full Xcode host/project and signing configuration are not included. The Gradle sample is the separate application context; neither library module depends on it.
+
+**Validation status:** tests are supplied but not executed in the authoring environment, which has no Java installation. The Gradle wrapper is included; compilation and platform UI/device verification remain necessary before release.
+
+## Public API
+
+```kotlin
+val state = rememberScoreState(scoreData)
+ScoreComposable(
+    state = state,
+    modifier = Modifier.fillMaxSize(),
+    style = ScoreStyle(
+        accent = Color(0xFF347B60),
+        measureWidth = 300f,
+        showStaff = true,
+        showTab = true,
+    ),
+    onEvent = { event ->
+        when (event) {
+            is ScoreEvent.NoteSelected -> inspectNote(event.noteId)
+            ScoreEvent.SelectionCleared -> clearInspector()
+            is ScoreEvent.ViewportChanged -> Unit
+        }
+    },
+)
+// Controlled by the host UI:
+state.zoomTo(1.25f)
+state.scrollTo(280f)
+state.selectedNoteId = "my-stable-note-id"
+```
+
+`rememberScoreState` retains viewport and selection when data changes. Publish replacement data/lists rather than mutating lists in place. Stable IDs preserve selection across edits; clear selection yourself when deleting its note. State mutations should occur on the UI thread. `ScoreState` is not a player clock or decoder session. Pinch and drag update viewport events; direct state mutations are host commands and do not emit events.
+
+## Data contract
+
+`ScoreData → Track → Measure → Beat → Note`, with a sealed `Effect` vocabulary. This hierarchy follows the common score-oriented mental model used by applications such as [TuxGuitar](https://github.com/helge17/tuxguitar); **no TuxGuitar source was copied or linked**.
+
+- Tuning is MIDI pitches in **string order 1..N** (high E first for standard guitar).
+- Note string is one-based; fret is nonnegative; MIDI is 0..127.
+- `staffStep` is diatonic distance above bottom treble E4 (0). Explicit accidentals avoid guessing enharmonic spelling in the renderer.
+- Beats are a sequential, single-voice stream, with quarter-relative durations and optional dots. An empty note list represents a rest. Notes within one beat are simultaneous.
+- IDs are globally unique; constructors reject duplicate IDs, invalid MIDI and invalid time signatures. Layout rejects strings outside the track's tuning.
+- Lists are read-only by convention, not deeply immutable collections. Decoder-specific metadata stays in the adapter.
+
+See `sample/.../DecoderAdapter.kt` for a deliberately small, suspendable decoder interface and explicit mapping. The mock does not parse GP5 bytes. A real decoder adapter should normalize timing and key spelling and report unsupported features rather than silently dropping them. If using TuxGuitar decoding code in a separate app, review its applicable license and platform/JVM dependencies first; it is not a portable commonMain dependency by default.
+
+## Rendering architecture
+
+1. **Model:** score values, with no drawing or platform concepts.
+2. **Layout:** `layoutScore` computes score-space measure bounds, duration-proportional beat positions and independent staff/tab hit rectangles.
+3. **Canvas:** uses cached geometry; converts logical dp to physical pixels once, applies viewport transforms, and skips off-screen measures before drawing.
+4. **Interaction:** maps input back into score coordinates and emits stable-ID events. Staff note heads and fret numbers both select the same note while reporting which representation was clicked.
+
+The baseline draws staff/tab lines, ledger lines, note heads, stems, basic beams/rests, explicit accidentals, dots, repeat markers and illustrative bends/slides/hammer-ons/pull-offs/vibrato/palm mute. Zoom uses a spring; selection details use animated visibility. Dragging remains immediate, avoiding laggy gesture tracking. The host controls all surrounding UI and theme.
+
+### Customization
+
+`ScoreStyle` controls colors, measure width, line spacing, track spacing, and representation visibility. Size the canvas via its modifier; no toolbar is forced on consumers. `onDrawEffect` is an additive `DrawScope` hook receiving the effect, anchor and style in logical score coordinates. Add a model effect, handle it in the renderer's exhaustive `when`, or decorate it in the hook. It is not a replacement hook for existing built-in marks.
+
+### Performance and next steps
+
+- Layout is memoized by data/style and is unaffected by selection or viewport changes.
+- Canvas draws only visible measures in both axes; text layouts are cached with `rememberTextMeasurer`.
+- Draw hit targets and notes from the same geometry to prevent independent drift.
+- Current visibility filtering and hit lookup scan their lists (O(n)); for large scores use per-track binary search over measure bounds and a spatial index for hit targets. Layout itself is whole-score and synchronous: compute incremental layouts off the UI thread for very large documents.
+- Repeated lines are cheap vector primitives. For heavier static engraving, cache per-measure `ImageBitmap` tiles keyed by score revision, style, density and zoom bucket. Keep selection overlays live; evict tiles using an LRU memory budget. Bitmap caching is an optimization design, **not implemented here**, because it can blur during zoom and consume substantial memory.
+
+## Scope / engraving limitations
+
+This is an extensible working implementation scaffold, **not a complete production engraving engine**. In particular:
+
+- One continuous horizontal system per track, no wrapping, pagination or print layout.
+- Basic beams connect consecutive short beats, not meter-aware beam groups; fixed upward stems, simplified rest shapes and no collision resolution for chords/accidentals/effects.
+- No clef/key-signature engraving, multi-voice timing, ties, tuplets, grace notes, alternate endings or cross-staff notation yet.
+- Ordinary system text is used for tab and accidental symbols; a bundled SMuFL music font and glyph metrics are recommended for production consistency.
+- Effect marks are illustrative, not complete GP5 effect semantics. Extreme tunings/string counts need host-adjusted track spacing.
+- Touch and pointer drag/pinch are implemented; no wheel/trackpad-scroll handler, keyboard navigation or per-note accessibility semantics yet. Canvas is not a substitute for a semantic accessibility tree; add one before shipping an accessible editor.
+- Zoom/selection are not saveable across process recreation; the host can persist its own state.
+
+Before release: compile all targets, run the supplied model/layout tests, add screenshot/golden and pointer tests, test physical touch devices and build an accessibility overlay. No audio or file decoding should enter either library module during these extensions.
