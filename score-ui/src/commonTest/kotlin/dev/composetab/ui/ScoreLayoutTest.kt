@@ -31,4 +31,25 @@ class ScoreLayoutTest {
         state.zoomTo(.1f); assertEquals(.5f, state.zoom)
         state.scrollTo(-12f); assertEquals(0f, state.scroll)
     }
+    @Test fun beamGroupsRespectSimpleAndCompoundMeter() {
+        val eighths = List(6) { index ->
+            PlacedBeat(Beat("b$index", Duration.Eighth, notes = listOf(Note("n$index", 64, 1, 0, 0))), index * 40f, index * .5f)
+        }
+        val simple = beamSegments(eighths, TimeSignature(3, 4))
+        assertEquals(3, simple.size) // Three pairs, no trailing flags.
+        assertEquals(44f, simple.first().to)
+        val compound = beamSegments(eighths, TimeSignature(6, 8))
+        assertEquals(4, compound.size) // Two groups of three eighth notes.
+        assertFalse(compound.any { it.from == 84f && it.to == 124f })
+    }
+    @Test fun cullingAndHitTestUseSameGeometry() {
+        val layout = layoutScore(score(), ScoreStyle())
+        assertTrue(layout.visibleMeasures(10000f, 0f, 11000f, 1000f).isEmpty())
+        assertEquals("n", layout.hitTest(layout.targets.first().bounds.center)?.event?.noteId)
+    }
+    @Test fun viewportRejectsNonFiniteInput() {
+        val state = ScoreState(score())
+        state.zoomTo(Float.NaN); state.scrollTo(Float.POSITIVE_INFINITY)
+        assertEquals(1f, state.zoom); assertEquals(0f, state.scroll)
+    }
 }

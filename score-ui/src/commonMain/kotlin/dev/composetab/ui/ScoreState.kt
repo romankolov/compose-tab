@@ -7,7 +7,7 @@ import dev.composetab.model.ScoreData
 sealed interface ScoreEvent {
     data class NoteSelected(val trackId: String, val measureId: String, val beatId: String, val noteId: String, val tablature: Boolean) : ScoreEvent
     data object SelectionCleared : ScoreEvent
-    data class ViewportChanged(val zoom: Float, val scroll: Float) : ScoreEvent
+    data class ViewportChanged(val zoom: Float, val scroll: Float, val verticalScroll: Float = 0f) : ScoreEvent
 }
 
 @Stable
@@ -20,9 +20,9 @@ class ScoreState(initialData: ScoreData) {
         private set
     var verticalScroll by mutableFloatStateOf(0f)
         private set
-    fun scrollVerticallyTo(value: Float) { verticalScroll = value.coerceAtLeast(0f) }
-    fun zoomTo(value: Float) { zoom = value.coerceIn(.5f, 2.5f) }
-    fun scrollTo(value: Float) { scroll = value.coerceAtLeast(0f) }
+    fun scrollVerticallyTo(value: Float) { verticalScroll = value.takeIf { it.isFinite() }?.coerceAtLeast(0f) ?: 0f }
+    fun zoomTo(value: Float) { zoom = value.takeIf { it.isFinite() }?.coerceIn(.5f, 2.5f) ?: 1f }
+    fun scrollTo(value: Float) { scroll = value.takeIf { it.isFinite() }?.coerceAtLeast(0f) ?: 0f }
 }
 
 @Composable

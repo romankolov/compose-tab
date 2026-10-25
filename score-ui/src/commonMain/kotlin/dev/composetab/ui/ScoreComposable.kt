@@ -3,6 +3,12 @@ package dev.composetab.ui
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.focusable
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.key.*
+import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.semantics.*
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.runtime.*
@@ -33,14 +39,73 @@ fun ScoreComposable(
     val zoom by animateFloatAsState(state.zoom, spring(stiffness = 500f), label = "score zoom")
     val text = rememberTextMeasurer(cacheSize = 256)
     val currentEvent by rememberUpdatedState(onEvent)
+    val focus = remember { FocusRequester() }
+    fun viewportEvent() = currentEvent(ScoreEvent.ViewportChanged(state.zoom, state.scroll, state.verticalScroll))
+    fun navigate(forward: Boolean): Boolean {
+        val targets = layout.targets.filter { it.event.tablature == style.showTab }
+        if (targets.isEmpty()) return false
+        val index = targets.indexOfFirst { it.event.noteId == state.selectedNoteId }
+        val next = if (index < 0) { if (forward) 0 else targets.lastIndex }
+            else (index + if (forward) 1 else -1).coerceIn(0, targets.lastIndex)
+        val target = targets[next]
+        state.selectedNoteId = target.event.noteId
+        state.scrollTo((target.bounds.center.x - 100f).coerceAtLeast(0f))
+        state.scrollVerticallyTo((target.bounds.center.y - 140f).coerceAtLeast(0f))
+        currentEvent(target.event)
+        viewportEvent()
+        return true
+    }
     Canvas(modifier
+        .focusRequester(focus)
+        .onKeyEvent { event ->
+            if (event.type != KeyEventType.KeyDown) false else when (event.key) {
+                Key.DirectionRight -> navigate(true)
+                Key.DirectionLeft -> navigate(false)
+                Key.Escape -> { state.selectedNoteId = null; currentEvent(ScoreEvent.SelectionCleared); true }
+                Key.Equals -> { state.zoomTo(state.zoom + .1f); viewportEvent(); true }
+                Key.Minus -> { state.zoomTo(state.zoom - .1f); viewportEvent(); true }
+                else -> false
+            }
+        }
+        .focusable()
+        .semantics {
+            contentDescription = "${state.data.title}, music score, ${state.data.tracks.size} tracks"
+            stateDescription = state.selectedNoteId?.let { "Selected note $it" } ?: "No note selected"
+            customActions = listOf(
+                CustomAccessibilityAction("Next note") { navigate(true) },
+                CustomAccessibilityAction("Previous note") { navigate(false) },
+                CustomAccessibilityAction("Zoom in") { state.zoomTo(state.zoom + .1f); viewportEvent(); true },
+                CustomAccessibilityAction("Zoom out") { state.zoomTo(state.zoom - .1f); viewportEvent(); true },
+            )
+        }
+        .pointerInput(state, layout) {
+            awaitPointerEventScope {
+                while (true) {
+                    val event = awaitPointerEvent()
+                    if (event.type == PointerEventType.Scroll) {
+                        val delta = event.changes.fold(Offset.Zero) { acc, change -> acc + change.scrollDelta }
+                        val maxX = (layout.width - size.width / (density * state.zoom)).coerceAtLeast(0f)
+                        val maxY = (layout.height - size.height / (density * state.zoom)).coerceAtLeast(0f)
+                        if (event.keyboardModifiers.isCtrlPressed) state.zoomTo(state.zoom - delta.y * .08f)
+                        else if (layout.rows.size <= 1 && maxX > 0f) state.scrollTo((state.scroll + (delta.x + delta.y) * 32 / state.zoom).coerceIn(0f, maxX))
+                        else {
+                            state.scrollTo((state.scroll + delta.x * 32 / state.zoom).coerceIn(0f, maxX))
+                            state.scrollVerticallyTo((state.verticalScroll + delta.y * 32 / state.zoom).coerceIn(0f, maxY))
+                        }
+                        event.changes.forEach { it.consume() }
+                        viewportEvent()
+                    }
+                }
+            }
+        }
         .pointerInput(state, layout, zoom) {
             detectTapGestures { point ->
+                focus.requestFocus()
                 val scale = density * zoom
                 val sx = state.scroll.coerceAtMost((layout.width - size.width / scale).coerceAtLeast(0f))
                 val sy = state.verticalScroll.coerceAtMost((layout.height - size.height / scale).coerceAtLeast(0f))
                 val logical = Offset(point.x / scale + sx, point.y / scale + sy)
-                val hit = layout.targets.lastOrNull { it.bounds.contains(logical) }
+                val hit = layout.hitTest(logical)
                 state.selectedNoteId = hit?.event?.noteId
                 currentEvent(hit?.event ?: ScoreEvent.SelectionCleared)
             }
@@ -56,7 +121,7 @@ fun ScoreComposable(
                 val maxY = (layout.height - size.height / (density * state.zoom)).coerceAtLeast(0f)
                 state.scrollTo((state.scroll + anchorX / oldZoom - anchorX / state.zoom - pan.x / (density * state.zoom)).coerceIn(0f, maxX))
                 state.scrollVerticallyTo((state.verticalScroll + anchorY / oldZoom - anchorY / state.zoom - pan.y / (density * state.zoom)).coerceIn(0f, maxY))
-                currentEvent(ScoreEvent.ViewportChanged(state.zoom, state.scroll))
+                viewportEvent()
             }
         }) {
         drawRect(style.paper)
@@ -70,18 +135,15 @@ fun ScoreComposable(
         }
         withTransform({ scale(factor, factor, Offset.Zero); translate(-scrollX, -scrollY) }) {
             // Cull complete measures before drawing any notation or measuring text.
-            layout.measures.asSequence().filter {
-                it.x + style.measureWidth >= scrollX && it.x <= scrollX + size.width / factor &&
-                    it.y + style.trackSpacing >= scrollY && it.y - 36 <= scrollY + size.height / factor
-            }.forEach { placed ->
+            layout.visibleMeasures(scrollX, scrollY, scrollX + size.width / factor, scrollY + size.height / factor).forEach { placed ->
                 val (track, measure, x, y, beats) = placed
                 val gap = style.lineSpacing
                 val tabY = y + if (style.showStaff) 110f else 0f
                 label("${measure.number}", x + 8, y - 27, 11f, true)
                 if (measure == track.measures.firstOrNull()) label(track.name, x, y - 48, 12f, true)
                 fun lines(top: Float, count: Int) {
-                    repeat(count) { i -> drawLine(style.muted.copy(alpha = .55f), Offset(x, top + i * gap), Offset(x + style.measureWidth, top + i * gap), .7f) }
-                    drawLine(style.ink, Offset(x + style.measureWidth, top), Offset(x + style.measureWidth, top + (count - 1) * gap), 1f)
+                    repeat(count) { i -> drawLine(style.muted.copy(alpha = .55f), Offset(x, top + i * gap), Offset(x + placed.width, top + i * gap), .7f) }
+                    drawLine(style.ink, Offset(x + placed.width, top), Offset(x + placed.width, top + (count - 1) * gap), 1f)
                 }
                 if (style.showStaff) {
                     lines(y, 5)
@@ -90,12 +152,12 @@ fun ScoreComposable(
                 }
                 if (style.showTab) { lines(tabY, track.tuning.size); label("TAB", x + 4, tabY + 17, 10f, true) }
                 if (measure.repeatStart || measure.repeatEnd) {
-                    val rx = if (measure.repeatStart) x + 3 else x + style.measureWidth - 5
+                    val rx = if (measure.repeatStart) x + 3 else x + placed.width - 5
                     val top = if (style.showStaff) y else tabY
                     drawLine(style.ink, Offset(rx, top), Offset(rx, top + 4 * gap), 2.5f)
                     repeat(2) { drawCircle(style.ink, 1.8f, Offset(rx + if (measure.repeatStart) 6 else -6, top + (1.5f + it) * gap)) }
                 }
-                beats.forEachIndexed { index, (beat, bx) ->
+                beats.forEach { (beat, bx) ->
                     if (beat.isRest) {
                         if (style.showStaff) {
                             if (beat.duration == Duration.Whole || beat.duration == Duration.Half) drawRect(style.ink, Offset(bx - 4, y + 15), Size(9f, 4f))
@@ -118,7 +180,6 @@ fun ScoreComposable(
                             if (note.staffStep < 0) for (step in -2 downTo note.staffStep step 2) drawLine(style.ink, Offset(bx - 9, y + 4 * gap - step * gap / 2), Offset(bx + 9, y + 4 * gap - step * gap / 2), .8f)
                             if (note.staffStep > 8) for (step in 10..note.staffStep step 2) drawLine(style.ink, Offset(bx - 9, y + 4 * gap - step * gap / 2), Offset(bx + 9, y + 4 * gap - step * gap / 2), .8f)
                             drawOval(style.ink, Offset(bx - 5, ny - 3.5f), Size(10f, 7f), style = if (beat.duration in listOf(Duration.Whole, Duration.Half)) Stroke(1.5f) else Fill)
-                            if (beat.duration != Duration.Whole) drawLine(style.ink, Offset(bx + 4, ny), Offset(bx + 4, y - 12), 1.2f)
                             note.accidental?.let { label(when (it) { Accidental.Sharp -> "♯"; Accidental.Flat -> "♭"; Accidental.Natural -> "♮" }, bx - 19, ny - 11, 17f) }
                             if (beat.dotted) drawCircle(style.ink, 1.6f, Offset(bx + 10, ny - 2))
                         }
@@ -147,13 +208,14 @@ fun ScoreComposable(
                             onDrawEffect?.invoke(this, effect, Offset(bx, effectY), style)
                         }
                     }
-                    if (style.showStaff && beat.notes.isNotEmpty() && beat.duration.quarters <= .5f) {
-                        val next = beats.getOrNull(index + 1)
-                        val connect = next != null && next.beat.notes.isNotEmpty() && next.beat.duration.quarters <= .5f
-                        val end = if (connect) next!!.x + 4 else bx + 13
-                        val count = when (beat.duration) { Duration.ThirtySecond -> 3; Duration.Sixteenth -> 2; else -> 1 }
-                        repeat(count) { beam -> drawLine(style.ink, Offset(bx + 4, y - 12 + beam * 5), Offset(end, y - 12 + beam * 5), 3f) }
+                    if (style.showStaff && beat.notes.isNotEmpty() && beat.duration != Duration.Whole) {
+                        val lowestY = beat.notes.maxOf { y + 4 * gap - it.staffStep * gap / 2 }
+                        drawLine(style.ink, Offset(bx + 4, lowestY), Offset(bx + 4, placed.beamY), 1.2f)
                     }
+                }
+                if (style.showStaff) placed.beams.forEach { beam ->
+                    drawLine(style.ink, Offset(beam.from, placed.beamY + beam.level * 5),
+                        Offset(beam.to, placed.beamY + beam.level * 5), 3f)
                 }
             }
         }
