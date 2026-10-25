@@ -15,6 +15,7 @@ on:
 permissions:
   contents: write
   actions: read
+  pull-requests: write
 jobs:
   release:
     if: >-
@@ -64,6 +65,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          exec > >(tee release-log.txt) 2>&1
           mkdir release
           cp artifacts/linux-desktop-app/*.tar.gz release/
           cp artifacts/android-debug/*.apk release/ComposeTabStudio-0.2.0-debug.apk
@@ -98,3 +100,11 @@ jobs:
           ![Selected note](https://github.com/$GITHUB_REPOSITORY/releases/download/$RELEASE_TAG/selected.png)
           EOF_NOTES
           gh release create "$RELEASE_TAG" release/* --target "$SOURCE_SHA" --prerelease --title "Compose Tab 0.2.0 · Advanced Preview" --notes-file release-notes.md
+      - name: Report shipping failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          { echo '### Preview shipping diagnostics'; echo '```text'; cat release-log.txt 2>/dev/null || true; echo '```'; } > shipping-diagnostic.md
+          PR=$(gh pr list --head "${{ github.ref_name }}" --state open --json number --jq '.[0].number // empty')
+          if [ -n "$PR" ]; then gh pr comment "$PR" --body-file shipping-diagnostic.md; fi
