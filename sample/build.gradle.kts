@@ -7,6 +7,7 @@ kotlin {
     listOf(iosArm64(), iosSimulatorArm64(), iosX64()).forEach {
         it.binaries.framework { baseName = "ComposeTabSample"; isStatic = true }
     }
+    applyDefaultHierarchyTemplate()
     sourceSets {
         commonMain.dependencies {
             implementation(project(":score-ui")); implementation(compose.material3)

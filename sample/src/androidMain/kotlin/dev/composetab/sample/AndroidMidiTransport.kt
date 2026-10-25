@@ -57,9 +57,9 @@ class AndroidMidiTransport(private val context: Context) : SampleTransport {
         check(!closed) { "Player is closed" }
         // Parse first, so a corrupt export does not destroy a working player.
         val timing = withContext(Dispatchers.Default) { MidiTempoMap.parse(song.midi) }
-        val file = withContext(Dispatchers.IO) {
-            File.createTempFile("compose-tab-", ".mid", context.cacheDir).apply { writeBytes(song.midi) }
-        }
+        val file = File.createTempFile("compose-tab-", ".mid", context.cacheDir)
+        try { withContext(Dispatchers.IO) { file.writeBytes(song.midi) } }
+        catch (failure: Exception) { file.delete(); throw failure }
         releasePlayer(); clock = timing; midiFile = file
         mutableStatus.value = TransportStatus(durationQuarters = song.document.timeline.durationQuarters, message = "Preparing Android MIDI audio…")
         val p = MediaPlayer(); player = p
@@ -119,5 +119,8 @@ class AndroidMidiTransport(private val context: Context) : SampleTransport {
             p.seekTo((clock?.millisecondsAt(q) ?: 0.0).toInt().coerceIn(0, p.duration))
         }
     }
-    override fun close() = onMain { closed = true; handler.removeCallbacks(poll); releasePlayer(); clock = null }
+    override fun close() = onMain {
+        closed = true; handler.removeCallbacks(poll); releasePlayer(); clock = null
+        mutableStatus.value = mutableStatus.value.copy(playing = false, audioAvailable = false, message = "Player closed")
+    }
 }

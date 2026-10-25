@@ -256,9 +256,9 @@ is claimed. Publish all needed KMP/platform publications together before using
 ./gradlew :score-model:publishToMavenLocal :score-ui:publishToMavenLocal # macOS + SDK/Xcode
 ```
 
-TuxGuitar is a conceptual object-hierarchy reference; no TuxGuitar source is
-copied. Bravura is bundled under SIL OFL. PyGuitarPro is separately installed
-under LGPL-3.0 and mido under MIT. See [third-party notices](THIRD_PARTY_NOTICES.md).
+TuxGuitar Java sources are used **only by the sample**, under LGPL 2.1; the
+score libraries remain decoder-independent. Bravura is bundled under SIL OFL.
+PyGuitarPro (LGPL-3.0) and mido (MIT) are optional developer fixture tools. See [third-party notices](THIRD_PARTY_NOTICES.md).
 
 The verified-preview shipping workflow in `.github/workflows/release-preview.yml`
 accepts a successful build run from the same branch and attaches **those exact

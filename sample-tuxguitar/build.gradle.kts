@@ -5,8 +5,8 @@ java {
     withSourcesJar()
 }
 tasks.jar {
-    from("LICENSE", "README.md") { into("META-INF/tuxguitar") }
+    from(listOf("LICENSE", "README.md")) { into("META-INF/tuxguitar") }
 }
 tasks.named<Jar>("sourcesJar") {
-    from("LICENSE", "README.md") { into("META-INF/tuxguitar") }
+    from(listOf("LICENSE", "README.md")) { into("META-INF/tuxguitar") }
 }
