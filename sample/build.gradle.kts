@@ -18,6 +18,15 @@ kotlin {
 }
 android {
     namespace = "dev.composetab.sample"; compileSdk = 35
-    defaultConfig { applicationId = "dev.composetab.sample"; minSdk = 24; targetSdk = 35; versionCode = 1; versionName = "1.0" }
+    defaultConfig { applicationId = "dev.composetab.sample"; minSdk = 24; targetSdk = 35; versionCode = 1; versionName = "0.2.0" }
 }
-compose.desktop { application { mainClass = "dev.composetab.sample.MainKt" } }
+compose.desktop {
+    application {
+        mainClass = "dev.composetab.sample.MainKt"
+        nativeDistributions {
+            packageName = "ComposeTabStudio"
+            packageVersion = "0.2.0"
+            modules("java.desktop", "java.logging", "jdk.unsupported")
+        }
+    }
+}

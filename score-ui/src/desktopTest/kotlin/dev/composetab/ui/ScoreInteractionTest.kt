@@ -14,6 +14,7 @@ import org.junit.Test
 import kotlin.test.*
 
 /** Real Compose scene: these tests run under Xvfb in GitHub Actions. */
+@OptIn(ExperimentalTestApi::class)
 class ScoreInteractionTest {
     @get:Rule val compose = createComposeRule()
     private val data = ScoreData("Interaction test", tracks = listOf(Track("track", "Guitar", measures = listOf(

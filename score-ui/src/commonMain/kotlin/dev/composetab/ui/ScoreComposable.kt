@@ -204,7 +204,7 @@ fun ScoreComposable(
                         note.effects.forEach { effect ->
                             when (effect) {
                                 is Effect.Bend -> {
-                                    val path = Path().apply { moveTo(bx + 7, effectY + 9); quadraticBezierTo(bx + 24, effectY + 9, bx + 24, effectY - 8); lineTo(bx + 20, effectY - 3); moveTo(bx + 24, effectY - 8); lineTo(bx + 28, effectY - 3) }
+                                    val path = Path().apply { moveTo(bx + 7, effectY + 9); quadraticTo(bx + 24, effectY + 9, bx + 24, effectY - 8); lineTo(bx + 20, effectY - 3); moveTo(bx + 24, effectY - 8); lineTo(bx + 28, effectY - 3) }
                                     drawPath(path, style.accent, style = Stroke(1.3f)); label("${effect.semitones}", bx + 27, effectY - 17, 9f)
                                 }
                                 Effect.Slide -> {
@@ -212,7 +212,7 @@ fun ScoreComposable(
                                     drawLine(style.accent, Offset(bx + 10, slideY + 5), Offset(bx + 27, slideY - 5), 1.3f)
                                 }
                                 Effect.HammerOn, Effect.PullOff -> {
-                                    val arc = Path().apply { moveTo(bx, effectY + 8); quadraticBezierTo(bx + 15, effectY - 8, bx + 31, effectY + 8) }
+                                    val arc = Path().apply { moveTo(bx, effectY + 8); quadraticTo(bx + 15, effectY - 8, bx + 31, effectY + 8) }
                                     drawPath(arc, style.accent, style = Stroke(1.2f)); label(if (effect == Effect.HammerOn) "H" else "P", bx + 12, effectY - 9, 9f)
                                 }
                                 Effect.Vibrato -> label("~", bx - 3, effectY - 3, 18f)

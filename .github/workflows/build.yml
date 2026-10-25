@@ -23,7 +23,7 @@ jobs:
       - name: Test libraries and assemble Android and Desktop
         run: |
           set -o pipefail
-          xvfb-run -a ./gradlew :score-model:desktopTest :score-ui:desktopTest :sample:assembleDebug :sample:desktopJar --console=plain 2>&1 | tee build-log.txt
+          xvfb-run -a ./gradlew :score-model:desktopTest :score-ui:desktopTest :sample:assembleDebug :sample:desktopJar :sample:createDistributable --console=plain 2>&1 | tee build-log.txt
       - name: Report build failure on PR
         if: failure()
         env:
@@ -51,6 +51,10 @@ jobs:
           name: desktop-screenshots
           path: docs/screenshots/*.png
           if-no-files-found: warn
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-desktop-app
+          path: sample/build/compose/binaries/main/app/
       - uses: actions/upload-artifact@v4
         with:
           name: android-debug
