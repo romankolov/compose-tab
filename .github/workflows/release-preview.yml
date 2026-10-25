@@ -99,7 +99,15 @@ jobs:
           ![Tab rhythm](https://github.com/$GITHUB_REPOSITORY/releases/download/$RELEASE_TAG/tab.png)
           ![Selected note](https://github.com/$GITHUB_REPOSITORY/releases/download/$RELEASE_TAG/selected.png)
           EOF_NOTES
-          gh release create "$RELEASE_TAG" release/* --target "$SOURCE_SHA" --prerelease --title "Compose Tab 0.2.0 · Advanced Preview" --notes-file release-notes.md
+          if gh release view "$RELEASE_TAG" --json isPrerelease --jq .isPrerelease > existing-release.txt 2>/dev/null; then
+            test "$(cat existing-release.txt)" = true
+            TAG_SHA=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$RELEASE_TAG" --jq .object.sha)
+            test "$TAG_SHA" = "$SOURCE_SHA"
+            gh release upload "$RELEASE_TAG" release/*
+            gh release edit "$RELEASE_TAG" --notes-file release-notes.md
+          else
+            gh release create "$RELEASE_TAG" release/* --target "$SOURCE_SHA" --prerelease --title "Compose Tab 0.2.0 · Advanced Preview" --notes-file release-notes.md
+          fi
       - name: Report shipping failure
         if: failure()
         env:
