@@ -10,7 +10,7 @@ from types import SimpleNamespace
 import mido
 
 ROOT = Path(__file__).resolve().parents[2]
-SPEC = importlib.util.spec_from_file_location('gp4_decoder', ROOT / 'sample/src/commonMain/composeResources/files/decode_gp4.py')
+SPEC = importlib.util.spec_from_file_location('gp4_decoder', ROOT / 'sample/tools/decode_gp4.py')
 decoder = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(decoder)
 

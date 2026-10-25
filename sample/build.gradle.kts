@@ -14,6 +14,12 @@ kotlin {
             implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.8.0")
             implementation(compose.components.resources)
         }
+        val jvmSharedMain by creating {
+            dependsOn(commonMain.get())
+            dependencies { implementation(project(":sample-tuxguitar")) }
+        }
+        androidMain.get().dependsOn(jvmSharedMain)
+        getByName("desktopMain").dependsOn(jvmSharedMain)
         androidMain.dependencies { implementation("androidx.activity:activity-compose:1.10.1") }
         commonTest.dependencies { implementation(kotlin("test")) }
         getByName("desktopMain").dependencies {
@@ -32,7 +38,7 @@ compose.desktop {
         nativeDistributions {
             packageName = "ComposeTabStudio"
             packageVersion = "0.3.0"
-            modules("java.desktop", "java.logging", "jdk.unsupported")
+            modules("java.xml", "java.desktop", "java.logging", "jdk.unsupported")
         }
     }
 }

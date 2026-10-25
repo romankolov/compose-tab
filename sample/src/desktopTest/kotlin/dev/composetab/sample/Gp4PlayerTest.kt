@@ -10,7 +10,7 @@ import kotlin.math.abs
 @OptIn(ExperimentalResourceApi::class)
 class Gp4PlayerTest {
     @Test fun normalizedDecoderDocumentAndMidiClockAgree() = runBlocking {
-        val song = Gp4DocumentAdapter.parse(Res.readBytes("files/original-study.json").decodeToString())
+        val song = TuxGuitarDecoder.decode(Res.readBytes("files/original-study.gp4"))
         assertEquals(12, song.document.data.tracks.single().measures.size)
         val player = DesktopMidiTransport(enableAudio = false)
         try {
@@ -32,6 +32,44 @@ class Gp4PlayerTest {
             player.stop(); delay(50)
             assertEquals(0.0, player.status.value.quarter, .001)
         } finally { player.close() }
+    }
+    @Test fun javaReadersDecodeGp3Gp4Gp5AndExportMatchingMidi() = runBlocking {
+        val sources = listOf("GP4" to Res.readBytes("files/original-study.gp4")) + listOf("gp3", "gp5").map { extension ->
+            extension to javaClass.getResourceAsStream("/fixtures/original-study.$extension")!!.use { it.readBytes() }
+        }
+        sources.forEach { (label, bytes) ->
+            val song = TuxGuitarDecoder.decode(bytes, label)
+            assertEquals("Open strings study", song.document.data.title)
+            assertEquals(12, song.document.data.tracks.single().measures.size)
+            assertEquals(96, song.document.index.notes.size)
+            assertEquals(48.0, song.document.timeline.durationQuarters, .001)
+            val midi = javax.sound.midi.MidiSystem.getSequence(java.io.ByteArrayInputStream(song.midi))
+            val notes = midi.tracks.sumOf { track -> (0 until track.size()).count { i ->
+                val message = track[i].message as? javax.sound.midi.ShortMessage
+                message?.command == javax.sound.midi.ShortMessage.NOTE_ON && message.data2 > 0
+            } }
+            assertEquals(96, notes, label)
+            val clock = MidiTempoMap.parse(song.midi)
+            assertEquals(midi.microsecondLength / 1000.0, clock.millisecondsAt(midi.tickLength.toDouble() / midi.resolution), 1.0)
+        }
+    }
+    @Test fun javaRepeatTimelineAndAndroidTempoClockMatchExport() {
+        val bytes = javaClass.getResourceAsStream("/fixtures/repeat-tempo.gp5")!!.use { it.readBytes() }
+        val song = TuxGuitarDecoder.decode(bytes)
+        assertEquals(56.0, song.document.timeline.durationQuarters, .001)
+        val firstBeat = song.document.data.tracks.single().measures.first().beats.first().id
+        assertEquals(listOf(0.0, 8.0), song.document.timeline.moments.filter { it.beatId == firstBeat }.map { it.startQuarter })
+        val midi = javax.sound.midi.MidiSystem.getSequence(java.io.ByteArrayInputStream(song.midi))
+        val clock = MidiTempoMap.parse(song.midi)
+        assertEquals(midi.microsecondLength / 1000.0, clock.millisecondsAt(midi.tickLength.toDouble() / midi.resolution), 1.0)
+        listOf(0.0, 1.0, 8.0, 20.0, 40.0, 55.0).forEach { q -> assertEquals(q, clock.quarterAt(clock.millisecondsAt(q)), .0001) }
+        assertTrue(clock.millisecondsAt(56.0) > 56 * 600.0, "Encoded tempo change must slow playback")
+    }
+    @Test fun malformedGpAndMidiFailWithoutMockScore() {
+        listOf(byteArrayOf(), "<html>not GP</html>".encodeToByteArray(), ByteArray(64)).forEach { bytes ->
+            assertFails { TuxGuitarDecoder.decode(bytes) }
+            assertFails { MidiTempoMap.parse(bytes) }
+        }
     }
     @Test fun malformedWireDataFailsRatherThanShowingMockScore() {
         assertFails { Gp4DocumentAdapter.parse("{}") }

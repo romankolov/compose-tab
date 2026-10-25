@@ -21,7 +21,7 @@ import kotlin.math.abs
 private val Green = Color(0xFF347B60)
 private val Ink = Color(0xFF26352F)
 
-@OptIn(ExperimentalResourceApi::class)
+@OptIn(ExperimentalResourceApi::class, ExperimentalLayoutApi::class)
 @Composable
 fun App(initialView: String = "both", services: SampleServices? = null, onLoaded: (Result<Unit>) -> Unit = {}) {
     MaterialTheme(colorScheme = lightColorScheme(primary = Green, secondary = Green, primaryContainer = Color(0xFFE3ECE3), secondaryContainer = Color(0xFFE3ECE3), onSecondaryContainer = Ink, background = Color(0xFFF3F4EF), surface = Color(0xFFFFFEFA), onSurface = Ink)) {
@@ -47,18 +47,18 @@ fun App(initialView: String = "both", services: SampleServices? = null, onLoaded
         }
         Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
             Column(Modifier.fillMaxSize().padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Column {
                         Text("COMPOSE / TAB", color = Green, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
                         Text("Decoder in. Your player in control.", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
                     }
-                    if (services != null) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (services != null) FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         OutlinedButton(enabled = !busy, onClick = { scope.launch {
                             busy = true; error = null
-                            try { services.importGp4()?.let { install(it) } }
+                            try { services.importGp()?.let { install(it) } }
                             catch (e: Exception) { if (e is kotlinx.coroutines.CancellationException) throw e; error = e.message }
                             finally { busy = false }
-                        } }) { Text("Open GP4") }
+                        } }) { Text("Load GP file") }
                         Button(enabled = !busy, onClick = { scope.launch {
                             busy = true; error = null
                             try { install(services.requestedSong()) }
@@ -75,7 +75,7 @@ fun App(initialView: String = "both", services: SampleServices? = null, onLoaded
                 }
                 val loaded = song
                 if (loaded != null) ScoreScreen(loaded, initialView, services, Modifier.weight(1f))
-                else if (!busy) Text("Configure the GP4 decoder (see sample/tools/requirements.txt), then open a GP4 file.")
+                else if (!busy) Text("Load a Guitar Pro 1–5 file to begin. No Python installation is needed.")
             }
         }
     }
@@ -171,7 +171,7 @@ private fun ScoreScreen(song: SampleSong, initialView: String, services: SampleS
                 Text("${status.quarter.toInt()} / ${status.durationQuarters.toInt()} q", style = MaterialTheme.typography.labelSmall)
             }
             Text(status.message, style = MaterialTheme.typography.bodySmall, color = if (status.audioAvailable) Green else Color.Gray)
-        } else Text("Desktop reference app provides GP4 import and General MIDI playback. This platform shows the predecoded original study.", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+        } else Text("Android and Desktop provide GP1–GP5 import and General MIDI playback. This platform shows the predecoded original study.", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
         AnimatedVisibility(state.selectedNoteId != null) {
             val note = track.measures.flatMap { it.beats }.flatMap { it.notes }.firstOrNull { it.id == state.selectedNoteId }
             Text(note?.let { "Selected · MIDI ${it.midi} · String ${it.string} · Fret ${it.fret}" }.orEmpty(),

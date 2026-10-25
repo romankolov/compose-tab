@@ -6,14 +6,14 @@ import argparse
 import hashlib
 from pathlib import Path
 import urllib.request
-import guitarpro
-from guitarpro import models as gp
 
 URL = 'https://gprotab.net/en/tabs/metallica/nothing-else-matters?download'
 ROOT = Path(__file__).resolve().parents[2]
 
 
 def fixture():
+    import guitarpro
+    from guitarpro import models as gp
     song = gp.Song()
     song.title = 'Open strings study'
     song.artist = 'Compose Tab · Original exercise'
