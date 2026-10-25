@@ -17,7 +17,8 @@ permissions:
   actions: read
 jobs:
   release:
-    if: github.event_name == 'workflow_dispatch' || startsWith(github.event.head_commit.message, 'ship: verified preview')
+    if: >-
+      github.event_name == 'workflow_dispatch' || startsWith(github.event.head_commit.message, 'ship: verified preview')
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v5
