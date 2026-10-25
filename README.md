@@ -31,7 +31,7 @@ For iOS, embed the generated `ComposeTabSample.framework` in a Swift Xcode app a
 
 ## GitHub build and real captures
 
-`.github/workflows/build.yml` builds the Android APK and Desktop app, runs model/layout tests and real Compose pointer/keyboard tests under Xvfb, links an iOS simulator framework on macOS, and runs the Desktop application three times to capture real windows. APK, framework, screenshots, and test reports are downloadable from each successful Actions run. Captures are also attached to this branch in `docs/screenshots/`. Images are produced by `java.awt.Robot`, not generated mockups. Physical Android/iOS device testing is still a release requirement.
+`.github/workflows/build.yml` builds the Android APK and Desktop app, runs model/layout tests and real Compose pointer/keyboard tests under Xvfb, links an iOS simulator framework on macOS, and runs the Desktop application three times to capture real windows. APK, runnable Linux desktop distribution, framework, screenshots, and test reports are downloadable from each successful Actions run. Captures are also attached to this branch in `docs/screenshots/`. Images are produced by `java.awt.Robot`, not generated mockups. The packaged Linux binary is also launched in CI, with a screenshot smoke check; its tarball preserves executable permissions. Physical Android/iOS device testing is still a release requirement.
 
 The sandbox has no JDK; build validation runs on GitHub-hosted runners. See the PR checks for the verified source revision.
 
@@ -47,6 +47,7 @@ ScoreComposable(
         measureWidth = 300f,
         showStaff = true,
         showTab = true,
+        showTabRhythm = true,
     ),
     onEvent = { event ->
         when (event) {
@@ -84,11 +85,19 @@ See `sample/.../DecoderAdapter.kt` for a deliberately small, suspendable decoder
 3. **Canvas:** uses cached geometry; converts logical dp to physical pixels once, applies viewport transforms, and skips off-screen measures before drawing.
 4. **Interaction:** maps input back into score coordinates and emits stable-ID events. Staff note heads and fret numbers both select the same note while reporting which representation was clicked.
 
-The baseline draws staff/tab lines, ledger lines, note heads, stems, basic beams/rests, explicit accidentals, dots, repeat markers and illustrative bends/slides/hammer-ons/pull-offs/vibrato/palm mute. Zoom uses a spring; selection details use animated visibility. Dragging remains immediate, avoiding laggy gesture tracking. The host controls all surrounding UI and theme.
+The baseline draws staff/tab lines, ledger lines, note heads, chord stems, meter-aware beams/rests, explicit accidentals, dots, repeat markers and illustrative bends/slides/hammer-ons/pull-offs/vibrato/palm mute. Zoom uses a spring; selection details use animated visibility. Dragging remains immediate, avoiding laggy gesture tracking. The host controls all surrounding UI and theme.
+
+### Screenshots from the running Desktop app
+
+![Combined notation and tablature](docs/screenshots/both.png)
+
+[Tab-only view with rhythm](docs/screenshots/tab.png) · [Selected note inspector](docs/screenshots/selected.png)
+
+These are captured automatically by GitHub Actions. The selected-note view uses deterministic sample state so screenshots are reproducible; separate Compose tests perform actual pointer and keyboard input.
 
 ### Customization
 
-`ScoreStyle` controls colors, measure width, line spacing, track spacing, and representation visibility. Size the canvas via its modifier; no toolbar is forced on consumers. `onDrawEffect` is an additive `DrawScope` hook receiving the effect, anchor and style in logical score coordinates. Add a model effect, handle it in the renderer's exhaustive `when`, or decorate it in the hook. It is not a replacement hook for existing built-in marks.
+`ScoreStyle` controls colors, measure width, line spacing, track spacing, representation visibility, and optional tab-only rhythmic notation. Size the canvas via its modifier; no toolbar is forced on consumers. `onDrawEffect` is an additive `DrawScope` hook receiving the effect, anchor and style in logical score coordinates. Add a model effect, handle it in the renderer's exhaustive `when`, or decorate it in the hook. It is not a replacement hook for existing built-in marks.
 
 ### Performance and next steps
 
@@ -124,3 +133,9 @@ The library modules use `maven-publish` with group `dev.composetab`, version `0.
 ```
 
 For an app in this repository use `implementation(project(":score-ui"))`. A separately published KMP consumer uses `implementation("dev.composetab:score-ui:0.2.0")`; publish the root KMP and required platform publications together before using that coordinate. An optional `Build` Maven repository writes to each module's `build/repository` for staging. Production repository URL, signing, and credentials should be configured by the maintainer, never embedded in source.
+
+## Try the packaged sample
+
+From a successful [Actions run](https://github.com/romankolov/compose-tab/actions/workflows/build.yml), download `linux-desktop-app`, extract the artifact ZIP and then `ComposeTabStudio-linux-x64.tar.gz`, and run `ComposeTabStudio/bin/ComposeTabStudio`. It includes its own Java runtime; it needs a Linux graphical session and the normal system graphics libraries. Install the `android-debug` APK using `adb install -r sample-debug.apk` (debug-signed, not a store release). The `ios-simulator-framework` artifact is for an arm64 simulator host, not a standalone installable iOS application.
+
+To package locally: `./gradlew :sample:createDistributable`. To recreate an individual screenshot: `./gradlew :sample:run --args="--screenshot=/absolute/path/capture.png --view=selected"` (views: `both`, `tab`, `selected`).

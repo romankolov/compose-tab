@@ -43,6 +43,7 @@ data class ScoreStyle(
     val trackSpacing: Float = 270f,
     val showStaff: Boolean = true,
     val showTab: Boolean = true,
+    val showTabRhythm: Boolean = true,
 ) {
     init { require(measureWidth.isFinite() && measureWidth >= 140f); require(lineSpacing.isFinite() && lineSpacing >= 6f); require(trackSpacing.isFinite() && trackSpacing >= 220f) }
 }

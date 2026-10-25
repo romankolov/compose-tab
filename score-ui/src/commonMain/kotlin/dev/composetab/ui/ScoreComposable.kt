@@ -48,7 +48,7 @@ fun ScoreComposable(
     val focus = remember { FocusRequester() }
     fun viewportEvent() = currentEvent(ScoreEvent.ViewportChanged(state.zoom, state.scroll, state.verticalScroll))
     fun navigate(forward: Boolean): Boolean {
-        val targets = layout.targets.filter { it.event.tablature == style.showTab }
+        val targets = layout.targets.filter { it.event.tablature == style.showTab }.distinctBy { it.event.noteId }
         if (targets.isEmpty()) return false
         val index = targets.indexOfFirst { it.event.noteId == state.selectedNoteId }
         val next = if (index < 0) { if (forward) 0 else targets.lastIndex }
@@ -149,6 +149,8 @@ fun ScoreComposable(
                 val (track, measure, x, y, beats) = placed
                 val gap = style.lineSpacing
                 val tabY = y + if (style.showStaff) 110f else 0f
+                val tabRhythm = style.showTab && !style.showStaff && style.showTabRhythm
+                val rhythmY = tabY + (track.tuning.size - 1) * gap + 50f
                 label("${measure.number}", x + 8, y - 27, 11f, true)
                 if (measure == track.measures.firstOrNull()) label(track.name, x, y - 48, 12f, true)
                 fun lines(top: Float, count: Int) {
@@ -168,15 +170,15 @@ fun ScoreComposable(
                     drawLine(style.ink, Offset(rx, top), Offset(rx, top + 4 * gap), 2.5f)
                     repeat(2) { drawCircle(style.ink, 1.8f, Offset(rx + if (measure.repeatStart) 6 else -6, top + (1.5f + it) * gap)) }
                 }
-                beats.forEach { (beat, bx) ->
+                beats.forEachIndexed { index, (beat, bx) ->
                     if (beat.isRest) {
-                        if (style.showStaff) {
+                        if (style.showStaff || tabRhythm) {
                             val rest = when (beat.duration) {
                                 Duration.Whole -> "\uE4E3"; Duration.Half -> "\uE4E4"
                                 Duration.Quarter -> "\uE4E5"; Duration.Eighth -> "\uE4E6"
                                 Duration.Sixteenth -> "\uE4E7"; Duration.ThirtySecond -> "\uE4E8"
                             }
-                            music(rest, bx - 5, y + 2 * gap, gap * 4)
+                            music(rest, bx - 5, if (tabRhythm) rhythmY else y + 2 * gap, gap * 4)
                             if (beat.dotted) drawCircle(style.ink, 1.6f, Offset(bx + 10, y + 1.5f * gap))
                         }
                         if (style.showTab) label("–", bx - 4, tabY + 16, 13f, true)
@@ -201,19 +203,21 @@ fun ScoreComposable(
                             label(note.fret.toString(), bx - if (note.fret >= 10) 7f else 3.5f, ty - 8, 13f)
                         }
                         val effectY = if (style.showTab) tabY - 16 else y - 27
+                        val nextOnString = beats.getOrNull(index + 1)?.takeIf { next -> next.beat.notes.any { it.string == note.string } }
+                        val effectEnd = nextOnString?.x ?: bx + 31f
                         note.effects.forEach { effect ->
                             when (effect) {
                                 is Effect.Bend -> {
                                     val path = Path().apply { moveTo(bx + 7, effectY + 9); quadraticTo(bx + 24, effectY + 9, bx + 24, effectY - 8); lineTo(bx + 20, effectY - 3); moveTo(bx + 24, effectY - 8); lineTo(bx + 28, effectY - 3) }
-                                    drawPath(path, style.accent, style = Stroke(1.3f)); label("${effect.semitones}", bx + 27, effectY - 17, 9f)
+                                    drawPath(path, style.accent, style = Stroke(1.3f)); label(when (effect.semitones) { .5f -> "¼"; 1f -> "½"; 2f -> "full"; else -> "${effect.semitones} st" }, bx + 27, effectY - 17, 9f)
                                 }
                                 Effect.Slide -> {
                                     val slideY = if (style.showTab) ty else ny
-                                    drawLine(style.accent, Offset(bx + 10, slideY + 5), Offset(bx + 27, slideY - 5), 1.3f)
+                                    drawLine(style.accent, Offset(bx + 10, slideY + 5), Offset(effectEnd - 9, slideY - 5), 1.3f)
                                 }
                                 Effect.HammerOn, Effect.PullOff -> {
-                                    val arc = Path().apply { moveTo(bx, effectY + 8); quadraticTo(bx + 15, effectY - 8, bx + 31, effectY + 8) }
-                                    drawPath(arc, style.accent, style = Stroke(1.2f)); label(if (effect == Effect.HammerOn) "H" else "P", bx + 12, effectY - 9, 9f)
+                                    val arc = Path().apply { moveTo(bx, effectY + 8); quadraticTo((bx + effectEnd) / 2, effectY - 8, effectEnd, effectY + 8) }
+                                    drawPath(arc, style.accent, style = Stroke(1.2f)); label(if (effect == Effect.HammerOn) "H" else "P", (bx + effectEnd) / 2 - 3, effectY - 9, 9f)
                                 }
                                 Effect.Vibrato -> label("~", bx - 3, effectY - 3, 18f)
                                 Effect.PalmMute -> label("P.M.", bx - 8, effectY - 3, 9f)
@@ -221,14 +225,22 @@ fun ScoreComposable(
                             onDrawEffect?.invoke(this, effect, Offset(bx, effectY), style)
                         }
                     }
+                    if (tabRhythm && beat.notes.isNotEmpty()) {
+                        if (beat.notes.any { it.id == state.selectedNoteId }) drawCircle(style.selection, 11f, Offset(bx, rhythmY))
+                        drawOval(style.ink, Offset(bx - 4, rhythmY - 3), Size(8f, 6f),
+                            style = if (beat.duration in listOf(Duration.Whole, Duration.Half)) Stroke(1.3f) else Fill)
+                        if (beat.duration != Duration.Whole) drawLine(style.ink, Offset(bx + 4, rhythmY), Offset(bx + 4, rhythmY - 28), 1.2f)
+                        if (beat.dotted) drawCircle(style.ink, 1.6f, Offset(bx + 10, rhythmY - 2))
+                    }
                     if (style.showStaff && beat.notes.isNotEmpty() && beat.duration != Duration.Whole) {
                         val lowestY = beat.notes.maxOf { y + 4 * gap - it.staffStep * gap / 2 }
                         drawLine(style.ink, Offset(bx + 4, lowestY), Offset(bx + 4, placed.beamY), 1.2f)
                     }
                 }
-                if (style.showStaff) placed.beams.forEach { beam ->
-                    drawLine(style.ink, Offset(beam.from, placed.beamY + beam.level * 5),
-                        Offset(beam.to, placed.beamY + beam.level * 5), 3f)
+                if (style.showStaff || tabRhythm) placed.beams.forEach { beam ->
+                    val beamY = if (tabRhythm) rhythmY - 28 else placed.beamY
+                    drawLine(style.ink, Offset(beam.from, beamY + beam.level * 5),
+                        Offset(beam.to, beamY + beam.level * 5), 3f)
                 }
             }
         }

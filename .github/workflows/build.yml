@@ -24,19 +24,17 @@ jobs:
         run: |
           set -o pipefail
           xvfb-run -a ./gradlew :score-model:desktopTest :score-ui:desktopTest :sample:assembleDebug :sample:desktopJar :sample:createDistributable --console=plain 2>&1 | tee build-log.txt
-      - name: Report build failure on PR
-        if: failure()
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          { echo '### CI diagnostics: Desktop / Android'; echo '```text'; head -120 build-log.txt; tail -60 build-log.txt; echo '```'; } > diagnostic.md
-          gh pr comment 1 --body-file diagnostic.md
       - name: Capture real desktop windows
         run: |
           mkdir -p docs/screenshots
           for view in both tab selected; do
             timeout 120s xvfb-run -a -s '-screen 0 1280x900x24' ./gradlew :sample:run --args="--screenshot=$PWD/docs/screenshots/$view.png --view=$view"
           done
+      - name: Smoke-test packaged app and archive executable permissions
+        run: |
+          timeout 120s xvfb-run -a -s '-screen 0 1280x900x24' sample/build/compose/binaries/main/app/ComposeTabStudio/bin/ComposeTabStudio --screenshot="$RUNNER_TEMP/packaged.png" --view=both
+          test -s "$RUNNER_TEMP/packaged.png"
+          tar -czf ComposeTabStudio-linux-x64.tar.gz -C sample/build/compose/binaries/main/app ComposeTabStudio
       - name: Attach captures to this branch
         if: github.event_name == 'push' && startsWith(github.ref, 'refs/heads/arena/')
         run: |
@@ -54,7 +52,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: linux-desktop-app
-          path: sample/build/compose/binaries/main/app/
+          path: ComposeTabStudio-linux-x64.tar.gz
       - uses: actions/upload-artifact@v4
         with:
           name: android-debug
@@ -64,6 +62,14 @@ jobs:
         with:
           name: test-reports
           path: '**/build/reports/tests/'
+      - name: Report build failure on PR
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          { echo '### CI diagnostics: Desktop / Android'; echo '```text'; head -120 build-log.txt; tail -60 build-log.txt; echo '```'; } > diagnostic.md
+          PR=$(gh pr list --head "${{ github.ref_name }}" --state open --json number --jq '.[0].number // empty')
+          if [ -n "$PR" ]; then gh pr comment "$PR" --body-file diagnostic.md; fi
   ios:
     runs-on: macos-14
     timeout-minutes: 30
@@ -87,4 +93,5 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           { echo '### CI diagnostics: iOS'; echo '```text'; head -120 build-log.txt; tail -60 build-log.txt; echo '```'; } > diagnostic.md
-          gh pr comment 1 --body-file diagnostic.md
+          PR=$(gh pr list --head "${{ github.ref_name }}" --state open --json number --jq '.[0].number // empty')
+          if [ -n "$PR" ]; then gh pr comment "$PR" --body-file diagnostic.md; fi

@@ -97,6 +97,8 @@ internal fun layoutScore(data: ScoreData, style: ScoreStyle): ScoreLayout {
                     }
                     if (style.showStaff) target(y + 4 * style.lineSpacing - note.staffStep * style.lineSpacing / 2, false)
                     if (style.showTab) target(y + (if (style.showStaff) 110f else 0f) + (note.string - 1) * style.lineSpacing, true)
+                    if (style.showTab && !style.showStaff && style.showTabRhythm)
+                        target(y + (track.tuning.size - 1) * style.lineSpacing + 50f, true)
                 }
                 PlacedBeat(beat, bx, onset)
             }

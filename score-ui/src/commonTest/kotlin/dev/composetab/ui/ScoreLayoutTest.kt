@@ -17,8 +17,8 @@ class ScoreLayoutTest {
     }
     @Test fun hiddenStaffHasNoStaffTargets() {
         val layout = layoutScore(score(), ScoreStyle(showStaff = false))
-        assertEquals(1, layout.targets.size)
-        assertTrue(layout.targets.single().event.tablature)
+        assertEquals(2, layout.targets.size)
+        assertTrue(layout.targets.all { it.event.tablature })
     }
     @Test fun emptyScoreStillHasFiniteBounds() {
         val layout = layoutScore(ScoreData("Empty", tracks = emptyList()), ScoreStyle())

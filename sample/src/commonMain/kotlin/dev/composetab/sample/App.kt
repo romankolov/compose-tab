@@ -21,7 +21,7 @@ private val Ink = Color(0xFF26352F)
 
 @Composable
 fun App(initialView: String = "both") {
-    MaterialTheme(colorScheme = lightColorScheme(primary = Green, background = Color(0xFFF3F4EF), surface = Color(0xFFFFFEFA), onSurface = Ink)) {
+    MaterialTheme(colorScheme = lightColorScheme(primary = Green, secondary = Green, primaryContainer = Color(0xFFE3ECE3), secondaryContainer = Color(0xFFE3ECE3), onSecondaryContainer = Ink, background = Color(0xFFF3F4EF), surface = Color(0xFFFFFEFA), onSurface = Ink)) {
         var data by remember { mutableStateOf<ScoreData?>(null) }
         LaunchedEffect(Unit) { data = MockGp5Decoder().decode(byteArrayOf()).toScoreData() }
         Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
@@ -94,7 +94,7 @@ private fun ScoreScreen(data: ScoreData, initialView: String) {
                 HorizontalDivider(color = Color(0xFFE9ECE5))
                 Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text("ZOOM", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
-                    Slider(value = state.zoom, onValueChange = state::zoomTo, valueRange = .5f..2.5f, modifier = Modifier.widthIn(max = 220.dp).weight(1f).padding(horizontal = 12.dp))
+                    Slider(value = state.zoom, onValueChange = state::zoomTo, valueRange = .5f..2.5f, modifier = Modifier.weight(1f, fill = false).widthIn(max = 220.dp).padding(horizontal = 12.dp))
                     Text("${(state.zoom * 100).toInt()}%", style = MaterialTheme.typography.labelMedium)
                     TextButton(onClick = { state.zoomTo(1f); state.scrollTo(0f); state.scrollVerticallyTo(0f) }) { Text("Reset") }
                 }
