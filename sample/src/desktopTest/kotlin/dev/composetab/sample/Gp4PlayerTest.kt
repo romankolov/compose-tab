@@ -68,7 +68,8 @@ class Gp4PlayerTest {
     }
     @Test fun javaReaderPreservesTabArticulationsAndStrokeDirections() {
         val bytes = javaClass.getResourceAsStream("/fixtures/effects.gp5")!!.use { it.readBytes() }
-        val beats = TuxGuitarDecoder.decode(bytes).document.data.tracks.single().measures.first().beats
+        val measures = TuxGuitarDecoder.decode(bytes).document.data.tracks.single().measures
+        val beats = measures.first().beats
         assertTrue(dev.composetab.model.Effect.HammerOn in beats[0].notes.first().effects)
         assertTrue(dev.composetab.model.Effect.PullOff in beats[1].notes.first().effects)
         assertTrue(beats[2].notes.first().effects.any { it is dev.composetab.model.Effect.Bend })
@@ -76,6 +77,10 @@ class Gp4PlayerTest {
         assertEquals(dev.composetab.model.StrumDirection.Down, beats[4].strum)
         assertEquals(dev.composetab.model.StrumDirection.Up, beats[5].strum)
         assertTrue(dev.composetab.model.Effect.Ghost in beats[6].notes.first().effects)
+        assertTrue(beats[2].notes.first().effects.filterIsInstance<dev.composetab.model.Effect.Bend>().single().hold)
+        assertTrue(dev.composetab.model.Effect.DeadNote in measures[1].beats[0].notes.first().effects)
+        assertTrue(dev.composetab.model.Effect.Slap in measures[1].beats[1].notes.first().effects)
+        assertTrue(measures[1].beats[2].notes.first().effects.filterIsInstance<dev.composetab.model.Effect.Bend>().single().release)
         assertTrue(beats[7].notes.first().effects.contains(dev.composetab.model.Effect.Harmonic(dev.composetab.model.HarmonicKind.Pinch)))
     }
     @Test fun malformedGpAndMidiFailWithoutMockScore() {

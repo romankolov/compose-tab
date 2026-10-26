@@ -85,4 +85,17 @@ class ScoreLayoutTest {
         state.clearPlayback()
         assertEquals(setOf("n"), state.selectedNoteIds)
     }
+    @Test fun compactTabHeightAndRhythmAreCustomizable() {
+        val data = score()
+        val compact = ScoreStyle(showStaff = false, tabStringSpacing = 14f, tabSystemSpacing = 28f)
+        val roomy = compact.copy(tabStringSpacing = 28f, tabSystemSpacing = 80f)
+        assertEquals(TabRhythmStyle.Beams, compact.tabRhythmStyle)
+        assertTrue(layoutScore(data, compact).rowHeight < layoutScore(data, roomy).rowHeight)
+        assertEquals(158f, layoutScore(data, compact).rowHeight, .001f) // five gaps + rhythm + system gap
+        assertTrue(layoutScore(data, compact.copy(showTabRhythm = false)).rowHeight < layoutScore(data, compact).rowHeight)
+        val notation = ScoreStyle(showStaff = true, showTab = false)
+        assertEquals(layoutScore(data, notation).rowHeight, layoutScore(data, notation.copy(tabStringSpacing = 30f)).rowHeight)
+        assertFailsWith<IllegalArgumentException> { compact.copy(tabSystemSpacing = Float.NaN) }
+    }
+
 }

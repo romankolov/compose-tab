@@ -19,6 +19,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.*
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.TextStyle
@@ -241,7 +242,10 @@ fun ScoreComposable(
                             // Ledger lines on every second staff step outside the five-line staff.
                             if (note.staffStep < 0) for (step in -2 downTo note.staffStep step 2) drawLine(style.ink, Offset(bx - 9, y + 4 * gap - step * gap / 2), Offset(bx + 9, y + 4 * gap - step * gap / 2), .8f)
                             if (note.staffStep > 8) for (step in 10..note.staffStep step 2) drawLine(style.ink, Offset(bx - 9, y + 4 * gap - step * gap / 2), Offset(bx + 9, y + 4 * gap - step * gap / 2), .8f)
-                            drawOval(style.ink, Offset(bx - 5, ny - 3.5f), Size(10f, 7f), style = if (beat.duration in listOf(Duration.Whole, Duration.Half)) Stroke(1.5f) else Fill)
+                            if (Effect.DeadNote in note.effects || Effect.Slap in note.effects) {
+                                drawLine(style.ink, Offset(bx - 4, ny - 4), Offset(bx + 4, ny + 4), 1.5f)
+                                drawLine(style.ink, Offset(bx - 4, ny + 4), Offset(bx + 4, ny - 4), 1.5f)
+                            } else drawOval(style.ink, Offset(bx - 5, ny - 3.5f), Size(10f, 7f), style = if (beat.duration in listOf(Duration.Whole, Duration.Half)) Stroke(1.5f) else Fill)
                             note.accidental?.let { music(when (it) { Accidental.Sharp -> "\uE262"; Accidental.Flat -> "\uE260"; Accidental.Natural -> "\uE261" }, bx - 17, ny, gap * 4) }
                             if (beat.dotted) drawCircle(style.ink, 1.6f, Offset(bx + 10, ny - 2))
                         }
@@ -256,24 +260,60 @@ fun ScoreComposable(
                         note.effects.forEach { effect ->
                             when (effect) {
                                 is Effect.Bend -> {
-                                    val path = Path().apply { moveTo(bx + 7, effectY + 9); quadraticTo(bx + 24, effectY + 9, bx + 24, effectY - 8); lineTo(bx + 20, effectY - 3); moveTo(bx + 24, effectY - 8); lineTo(bx + 28, effectY - 3) }
-                                    drawPath(path, style.accent, style = Stroke(1.3f)); label(when (effect.semitones) { .5f -> "¼"; 1f -> "½"; 2f -> "full"; else -> "${effect.semitones} st" }, bx + 27, effectY - 17, 9f)
+                                    val base = if (style.showTab) ty else ny
+                                    val height = 28f + effect.semitones.coerceAtMost(2f) * 8f
+                                    val tipX = bx + 7 + (effectEnd - bx - 14).coerceIn(18f, 42f)
+                                    val tipY = base - height
+                                    val curve = Path().apply {
+                                        moveTo(bx + 7, base - 2)
+                                        cubicTo(tipX - 5, base - 2, tipX, base - height * .65f, tipX, tipY)
+                                    }
+                                    drawPath(curve, style.ink, style = Stroke(1.3f))
+                                    drawPath(Path().apply { moveTo(tipX, tipY); lineTo(tipX - 4, tipY + 7); lineTo(tipX + 4, tipY + 7); close() }, style.ink)
+                                    label(when (effect.semitones) { .5f -> "¼"; 1f -> "½"; 2f -> "full"; else -> "${effect.semitones} st" }, tipX - 8, tipY - 15, 10f)
+                                    if (effect.hold) drawLine(style.ink, Offset(tipX + 3, tipY), Offset(maxOf(tipX + 16, effectEnd - 7), tipY), 1f,
+                                        pathEffect = PathEffect.dashPathEffect(floatArrayOf(4f, 3f)))
+                                    if (effect.release) drawPath(Path().apply {
+                                        moveTo(tipX, tipY + 8); quadraticTo(tipX + 8, base - 4, maxOf(tipX + 16, effectEnd - 7), base - 2)
+                                    }, style.ink, style = Stroke(1.2f))
                                 }
                                 Effect.Slide -> {
                                     val slideY = if (style.showTab) ty else ny
-                                    drawLine(style.accent, Offset(bx + 10, slideY + 5), Offset(effectEnd - 9, slideY - 5), 1.3f)
+                                    drawLine(style.ink, Offset(bx + 10, slideY + 5), Offset(effectEnd - 9, slideY - 5), 1.3f)
                                 }
                                 Effect.HammerOn, Effect.PullOff -> {
-                                    val arc = Path().apply { moveTo(bx + 8, effectY + 8); quadraticTo((bx + effectEnd) / 2, effectY - 8, effectEnd - 8, effectY + 8) }
-                                    drawPath(arc, style.accent, style = Stroke(1.2f)); label(if (effect == Effect.HammerOn) "H" else "P", (bx + effectEnd) / 2 - 3, effectY - 9, 9f)
+                                    // One continuous slur for a connected run, rather than
+                                    // repeating H/P labels and separate bumps on every fret.
+                                    val previous = beats.take(index).lastOrNull { it.onset < beats[index].onset && it.beat.notes.any { n -> n.string == note.string } }
+                                        ?.beat?.notes?.firstOrNull { it.string == note.string }
+                                    if (previous?.effects?.any { it == Effect.HammerOn || it == Effect.PullOff } != true) {
+                                        var end = effectEnd
+                                        for (next in beats.drop(index + 1).filter { it.onset > beats[index].onset }) {
+                                            val n = next.beat.notes.firstOrNull { it.string == note.string } ?: break
+                                            end = next.x
+                                            if (n.effects.none { it == Effect.HammerOn || it == Effect.PullOff }) break
+                                        }
+                                        val arc = Path().apply { moveTo(bx + 7, effectY + 8); quadraticTo((bx + end) / 2, effectY - 10, end - 7, effectY + 8) }
+                                        drawPath(arc, style.ink, style = Stroke(1.3f))
+                                        if (style.showLegatoLabels) label(if (effect == Effect.HammerOn) "H" else "P", (bx + end) / 2 - 3, effectY - 11, 9f)
+                                    }
                                 }
-                                Effect.Vibrato -> label("~", bx - 3, effectY - 3, 18f)
+                                Effect.Vibrato -> {
+                                    val bend = note.effects.filterIsInstance<Effect.Bend>().firstOrNull()
+                                    val waveY = (if (style.showTab) ty else ny) - if (bend != null) 50f + bend.semitones.coerceAtMost(2f) * 8f else 22f
+                                    val wave = Path().apply {
+                                        moveTo(bx, waveY)
+                                        repeat(12) { i -> lineTo(bx + (i + 1) * 3f, waveY + if (i % 2 == 0) -2.5f else 2.5f) }
+                                    }
+                                    drawPath(wave, style.ink, style = Stroke(2f))
+                                }
+                                Effect.DeadNote, Effect.Slap -> Unit // Fret is replaced by x, not a sounding note head.
                                 Effect.PalmMute -> label("P.M.", bx + 8, effectY - 3, 8f)
                                 Effect.Ghost -> Unit // Parentheses are part of the fret label.
                                 is Effect.Harmonic -> {
                                     if (!style.showTab) {
                                         val diamond = Path().apply { moveTo(bx, ny - 6); lineTo(bx + 6, ny); lineTo(bx, ny + 6); lineTo(bx - 6, ny); close() }
-                                        drawPath(diamond, style.accent, style = Stroke(1f))
+                                        drawPath(diamond, style.ink, style = Stroke(1f))
                                     }
                                     if (effect.kind != HarmonicKind.Natural) label(when (effect.kind) {
                                         HarmonicKind.Artificial -> "A.H."; HarmonicKind.Tapped -> "T.H."
@@ -290,15 +330,23 @@ fun ScoreComposable(
                         val tip = if (direction == StrumDirection.Down) bottom else top
                         val tail = if (direction == StrumDirection.Down) top else bottom
                         val head = if (direction == StrumDirection.Down) -5f else 5f
-                        drawLine(style.accent, Offset(bx - 24, tail), Offset(bx - 24, tip), 1.4f)
-                        drawLine(style.accent, Offset(bx - 28, tip + head), Offset(bx - 24, tip), 1.4f)
-                        drawLine(style.accent, Offset(bx - 20, tip + head), Offset(bx - 24, tip), 1.4f)
+                        drawLine(style.ink, Offset(bx - 24, tail), Offset(bx - 24, tip), 1.4f)
+                        drawLine(style.ink, Offset(bx - 28, tip + head), Offset(bx - 24, tip), 1.4f)
+                        drawLine(style.ink, Offset(bx - 20, tip + head), Offset(bx - 24, tip), 1.4f)
                     }
                     if (tabRhythm && beat.notes.isNotEmpty()) {
-                        drawOval(style.ink, Offset(bx - 4, rhythmY - 3), Size(8f, 6f),
-                            style = if (beat.duration in listOf(Duration.Whole, Duration.Half)) Stroke(1.3f) else Fill)
-                        if (beat.duration != Duration.Whole) drawLine(style.ink, Offset(bx + 4, rhythmY), Offset(bx + 4, rhythmY - 28), 1.2f)
-                        if (beat.dotted) drawCircle(style.ink, 1.6f, Offset(bx + 10, rhythmY - 2))
+                        if (style.tabRhythmStyle == TabRhythmStyle.Notes) {
+                            drawOval(style.ink, Offset(bx - 4, rhythmY - 3), Size(8f, 6f),
+                                style = if (beat.duration in listOf(Duration.Whole, Duration.Half)) Stroke(1.3f) else Fill)
+                        } else if (beat.duration == Duration.Whole) {
+                            drawLine(style.muted, Offset(bx - 2, rhythmY), Offset(bx + 10, rhythmY), 1.5f)
+                        } else if (beat.duration == Duration.Half) {
+                            // Small duration tick distinguishes a half from a quarter without a head.
+                            drawLine(style.muted, Offset(bx, rhythmY - 6), Offset(bx + 8, rhythmY - 6), 1.5f)
+                        }
+                        if (beat.duration != Duration.Whole) drawLine(if (style.tabRhythmStyle == TabRhythmStyle.Beams) style.muted else style.ink,
+                            Offset(bx + 4, rhythmY), Offset(bx + 4, rhythmY - 28), 1.2f)
+                        if (beat.dotted) drawCircle(style.ink, 1.6f, Offset(bx + 10, rhythmY - 8))
                     }
                     if (style.showStaff && beat.notes.isNotEmpty() && beat.duration != Duration.Whole) {
                         val lowestY = beat.notes.maxOf { y + 4 * gap - it.staffStep * gap / 2 }
@@ -306,9 +354,11 @@ fun ScoreComposable(
                     }
                 }
                 if (style.showStaff || tabRhythm) placed.beams.forEach { beam ->
-                    val beamY = if (tabRhythm) rhythmY - 28 else placed.beamY
-                    drawLine(style.ink, Offset(beam.from, beamY + beam.level * 5),
-                        Offset(beam.to, beamY + beam.level * 5), 3f)
+                    val bare = tabRhythm && style.tabRhythmStyle == TabRhythmStyle.Beams
+                    val beamY = if (tabRhythm) (if (bare) rhythmY else rhythmY - 28) else placed.beamY
+                    val levelOffset = beam.level * if (bare) -5f else 5f
+                    drawLine(if (bare) style.muted else style.ink, Offset(beam.from, beamY + levelOffset),
+                        Offset(beam.to, beamY + levelOffset), 3f)
                 }
             }
         }

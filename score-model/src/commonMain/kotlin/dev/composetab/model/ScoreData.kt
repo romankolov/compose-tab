@@ -60,13 +60,17 @@ enum class StrumDirection { Up, Down }
 enum class HarmonicKind { Natural, Artificial, Tapped, Pinch, Semi }
 
 sealed interface Effect {
-    data class Bend(val semitones: Float = 1f) : Effect {
+    data class Bend(val semitones: Float = 1f, val release: Boolean = false, val hold: Boolean = false) : Effect {
         init { require(semitones.isFinite() && semitones >= 0f) }
     }
     data object Slide : Effect
     data object HammerOn : Effect
     data object PullOff : Effect
     data object Vibrato : Effect
+    /** A muted/dead string strike, displayed as x rather than a fret. */
+    data object DeadNote : Effect
+    /** Percussive string slap; pitch/fret remains available to the host. */
+    data object Slap : Effect
     data object Ghost : Effect
     data class Harmonic(val kind: HarmonicKind = HarmonicKind.Natural) : Effect
     data object PalmMute : Effect

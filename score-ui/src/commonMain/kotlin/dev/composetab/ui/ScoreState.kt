@@ -91,6 +91,8 @@ fun rememberScoreState(document: ScoreDocument): ScoreState {
     return state
 }
 
+enum class TabRhythmStyle { Beams, Notes }
+
 data class ScoreStyle(
     val paper: Color = Color(0xFFFFFEFA),
     val ink: Color = Color(0xFF26352F),
@@ -110,7 +112,11 @@ data class ScoreStyle(
     val playingHighlight: ScoreHighlightStyle = ScoreHighlightStyle(color = Color(0x6675B4D7)),
     val playhead: ScoreHighlightStyle = ScoreHighlightStyle(HighlightShape.VerticalLine, Color(0xFF2482B0)),
     /** Room for note-local tab articulation arcs, labels and bend arrows. */
-    val tabStringSpacing: Float = 24f,
+    val tabStringSpacing: Float = 18f,
+    /** Clear space between tab-only systems; notation layout retains trackSpacing. */
+    val tabSystemSpacing: Float = 52f,
+    val tabRhythmStyle: TabRhythmStyle = TabRhythmStyle.Beams,
+    val showLegatoLabels: Boolean = false,
 ) {
-    init { require(tabStringSpacing.isFinite() && tabStringSpacing >= 10f); require(measureWidth.isFinite() && measureWidth >= 140f); require(lineSpacing.isFinite() && lineSpacing >= 6f); require(trackSpacing.isFinite() && trackSpacing >= 220f) }
+    init { require(tabSystemSpacing.isFinite() && tabSystemSpacing >= 24f); require(tabStringSpacing.isFinite() && tabStringSpacing >= 10f); require(measureWidth.isFinite() && measureWidth >= 140f); require(lineSpacing.isFinite() && lineSpacing >= 6f); require(trackSpacing.isFinite() && trackSpacing >= 220f) }
 }

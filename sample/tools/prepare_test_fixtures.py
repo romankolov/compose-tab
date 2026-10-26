@@ -36,4 +36,12 @@ for i, fret in enumerate([5, 7, 5, 12, 0, 0, 3, 5]):
         beat.notes.extend([models.Note(beat, string=s, value=0, type=models.NoteType.normal) for s in [1, 3, 4]])
         beat.effect.stroke = models.BeatStroke(direction=models.BeatStrokeDirection.down if i == 4 else models.BeatStrokeDirection.up, value=8)
     voice.beats.append(beat)
+# Include sustained bend + vibrato, a dead-string rake and a percussive slap.
+voice.beats[2].notes[0].effect.vibrato = True
+voice.beats[2].notes[0].effect.bend.points = [models.BendPoint(0, 0), models.BendPoint(30, 2), models.BendPoint(60, 2)]
+second = song.tracks[0].measures[1].voices[0].beats
+second[0].notes[0].type = models.NoteType.dead
+second[1].effect.slapEffect = models.SlapEffect.slapping
+second[2].notes[0].effect.bend = models.BendEffect(type=models.BendType.bendRelease, value=50,
+    points=[models.BendPoint(0, 0), models.BendPoint(30, 2), models.BendPoint(60, 0)])
 guitarpro.write(song, str(folder / 'effects.gp5'), version=(5, 1, 0))

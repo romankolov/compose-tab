@@ -19,13 +19,15 @@ class TabEffectsTest {
     @Test fun conventionalGhostAndHarmonicFretLabels() {
         val note = Note("n", 64, 1, 12, 0)
         assertEquals("12", tabFretLabel(note))
+        assertEquals("x", tabFretLabel(note.copy(effects = listOf(Effect.DeadNote))))
+        assertEquals("x", tabFretLabel(note.copy(effects = listOf(Effect.Slap))))
         assertEquals("(12)", tabFretLabel(note.copy(effects = listOf(Effect.Ghost))))
         assertEquals("<12>", tabFretLabel(note.copy(effects = listOf(Effect.Harmonic()))))
-        assertEquals("(<12>)", tabFretLabel(note.copy(effects = listOf(Effect.Ghost, Effect.Harmonic(HarmonicKind.Pinch)))))
+        assertEquals("(◆12)", tabFretLabel(note.copy(effects = listOf(Effect.Ghost, Effect.Harmonic(HarmonicKind.Pinch)))))
     }
 
     @Test fun articulationsAnchorToTheirOwnTabStrings() {
-        val effects = listOf(Effect.HammerOn, Effect.PullOff, Effect.Bend(2f), Effect.Ghost, Effect.Harmonic())
+        val effects = listOf(Effect.HammerOn, Effect.PullOff, Effect.Bend(2f, hold = true, release = true), Effect.DeadNote, Effect.Slap, Effect.Harmonic())
         val notes = effects.mapIndexed { i, e -> Note("n$i", 64 - i, i + 1, i + 2, 0, effects = listOf(e)) }
         val data = ScoreData("Effects", tracks = listOf(Track("t", "Guitar", measures = listOf(
             Measure("m", 1, beats = listOf(Beat("b", notes = notes, strum = StrumDirection.Down),

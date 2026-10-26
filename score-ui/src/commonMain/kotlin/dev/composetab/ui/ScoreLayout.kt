@@ -97,8 +97,13 @@ internal fun layoutScore(data: ScoreData, style: ScoreStyle, viewportWidth: Floa
         val lowest = track.measures.flatMap { it.beats }.flatMap { it.notes }.minOfOrNull { it.staffStep } ?: 0
         track.id to if (style.showStaff) maxOf(110f, 4 * style.lineSpacing - lowest * style.lineSpacing / 2 + 30f) else 0f
     }
-    val rowHeight = max(style.trackSpacing, data.tracks.maxOfOrNull { track ->
-        tabOffsets.getValue(track.id) + track.tuning.size * style.tabStringSpacing + 80f
+    val rowHeight = if (!style.showStaff && style.showTab) {
+        // Tab-only height responds to string spacing instead of retaining the
+        // notation system's 270-unit minimum (which left large empty bands).
+        (data.tracks.maxOfOrNull { (it.tuning.size - 1) * style.tabStringSpacing } ?: 0f) +
+            (if (style.showTabRhythm) 60f else 18f) + style.tabSystemSpacing
+    } else max(style.trackSpacing, data.tracks.maxOfOrNull { track ->
+        if (style.showTab) tabOffsets.getValue(track.id) + track.tuning.size * style.tabStringSpacing + 80f else 90f
     } ?: 270f)
     val rows = (0 until systemCount).flatMap { systemIndex -> data.tracks.mapIndexed { trackIndex, track ->
         track.measures.mapIndexedNotNull { index, measure ->

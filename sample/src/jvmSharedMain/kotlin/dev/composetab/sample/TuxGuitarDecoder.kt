@@ -67,7 +67,14 @@ object TuxGuitarDecoder : ScoreAdapter<ByteArray> {
                                         if (pc in listOf(1, 3, 6, 8, 10)) Accidental.Sharp else null,
                                         buildList {
                                             val e = n.effect
-                                            if (e.isBend) add(Effect.Bend((e.bend.points.maxOfOrNull { it.value } ?: 0).toFloat()))
+                                            if (e.isBend) {
+                                                val points = e.bend.points
+                                                val peak = points.maxOfOrNull { it.value } ?: 0
+                                                add(Effect.Bend(peak.toFloat(), release = (points.lastOrNull()?.value ?: peak) < peak,
+                                                    hold = points.size > 2 && points.takeLast(2).all { it.value == peak }))
+                                            }
+                                            if (e.isDeadNote) add(Effect.DeadNote)
+                                            if (e.isSlapping) add(Effect.Slap)
                                             if (e.isGhostNote) add(Effect.Ghost)
                                             if (e.isHarmonic) add(Effect.Harmonic(when (e.harmonic.type) {
                                                 2 -> HarmonicKind.Artificial; 3 -> HarmonicKind.Tapped

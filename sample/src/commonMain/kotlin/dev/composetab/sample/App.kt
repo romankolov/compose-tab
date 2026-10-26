@@ -89,6 +89,11 @@ private fun Studio(song: SampleSong?, initialView: String, services: SampleServi
     var staff by remember { mutableStateOf(initialView != "tab") }
     var tab by remember { mutableStateOf(true) }
     var dark by remember { mutableStateOf(false) }
+    var tabSpacing by remember { mutableStateOf(18f) }
+    var tabSystemGap by remember { mutableStateOf(52f) }
+    var rhythmStyle by remember { mutableStateOf(TabRhythmStyle.Beams) }
+    var tabRhythm by remember { mutableStateOf(true) }
+    var legatoLabels by remember { mutableStateOf(false) }
     var mode by remember { mutableStateOf(if (initialView == "horizontal") ScoreLayoutMode.Horizontal else ScoreLayoutMode.Vertical) }
     var selectionShape by remember { mutableStateOf(HighlightShape.NoteHead) }
     var playingShape by remember { mutableStateOf(HighlightShape.NoteHead) }
@@ -111,6 +116,8 @@ private fun Studio(song: SampleSong?, initialView: String, services: SampleServi
         Box(Modifier.weight(1f).fillMaxWidth()) {
             if (song != null) ScoreComposable(state, Modifier.fillMaxSize(), ScoreStyle(
                 showStaff = staff, showTab = tab, layoutMode = mode,
+                tabStringSpacing = tabSpacing, tabSystemSpacing = tabSystemGap,
+                tabRhythmStyle = rhythmStyle, showTabRhythm = tabRhythm, showLegatoLabels = legatoLabels,
                 paper = if (dark) Color(0xFF202C29) else Color(0xFFFFFEFA),
                 ink = if (dark) Color(0xFFE9F0E6) else Ink,
                 muted = if (dark) Color(0xFF9CAEA1) else Color(0xFF89938B),
@@ -177,6 +184,16 @@ private fun Studio(song: SampleSong?, initialView: String, services: SampleServi
                 FilterChip(tab, { if (staff) tab = !tab }, label = { Text("Tab") })
                 FilterChip(dark, { dark = !dark }, label = { Text("Night") })
                 FilterChip(state.followPlayback, { state.followPlayback = !state.followPlayback }, label = { Text("Follow cursor") })
+            }
+            Text("Tab string spacing · ${tabSpacing.toInt()}", style = MaterialTheme.typography.labelLarge)
+            Slider(tabSpacing, { tabSpacing = it }, valueRange = 12f..32f)
+            Text("Tab system gap · ${tabSystemGap.toInt()}", style = MaterialTheme.typography.labelLarge)
+            Slider(tabSystemGap, { tabSystemGap = it }, valueRange = 24f..100f)
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilterChip(rhythmStyle == TabRhythmStyle.Beams, { rhythmStyle = TabRhythmStyle.Beams }, label = { Text("Rhythm beams") })
+                FilterChip(rhythmStyle == TabRhythmStyle.Notes, { rhythmStyle = TabRhythmStyle.Notes }, label = { Text("Rhythm note heads") })
+                FilterChip(tabRhythm, { tabRhythm = !tabRhythm }, label = { Text("Show tab rhythm") })
+                FilterChip(legatoLabels, { legatoLabels = !legatoLabels }, label = { Text("H/P labels") })
             }
             Text("Zoom · ${(state.zoom * 100).toInt()}%", style = MaterialTheme.typography.labelLarge)
             Slider(state.zoom, state::zoomTo, valueRange = .5f..2.5f)
