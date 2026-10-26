@@ -32,4 +32,8 @@ publishing {
 val linkedSamples = providers.environmentVariable("COMPOSE_TAB_JSON_SAMPLES")
 tasks.withType<org.gradle.api.tasks.testing.Test>().configureEach {
     if (linkedSamples.isPresent) inputs.dir(linkedSamples.get())
+    testLogging {
+        exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
+        showStandardStreams = true
+    }
 }

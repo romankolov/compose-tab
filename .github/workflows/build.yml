@@ -30,8 +30,20 @@ jobs:
       - name: Fetch complete custom JSON contract samples
         run: |
           mkdir -p "$COMPOSE_TAB_JSON_SAMPLES"
-          curl --fail --location --retry 2 --max-time 60 'https://dqsljvtekg760.cloudfront.net/439/9821972/v0-3-2-ZFupge6YADvcqilc/3.json' -o "$COMPOSE_TAB_JSON_SAMPLES/track-1.json"
-          curl --fail --location --retry 2 --max-time 60 'https://dqsljvtekg760.cloudfront.net/523530/523926/v2-34-0-uILv-D-NdsCuc2xn/0.json' -o "$COMPOSE_TAB_JSON_SAMPLES/track-2.json"
+          curl --compressed --fail --location --retry 2 --max-time 60 'https://dqsljvtekg760.cloudfront.net/439/9821972/v0-3-2-ZFupge6YADvcqilc/3.json' -o "$COMPOSE_TAB_JSON_SAMPLES/track-1.json"
+          curl --compressed --fail --location --retry 2 --max-time 60 'https://dqsljvtekg760.cloudfront.net/523530/523926/v2-34-0-uILv-D-NdsCuc2xn/0.json' -o "$COMPOSE_TAB_JSON_SAMPLES/track-2.json"
+          python3 - <<'PYJSON'
+          import gzip, json, os
+          from pathlib import Path
+          for path in sorted(Path(os.environ['COMPOSE_TAB_JSON_SAMPLES']).glob('*.json')):
+              data = path.read_bytes()
+              if data.startswith(b'\x1f\x8b'):
+                  data = gzip.decompress(data)
+              text = data.decode('utf-8-sig')
+              payload = json.loads(text)
+              path.write_text(text, encoding='utf-8')
+              print(f'{path.name}: {len(data)} bytes, {len(payload["measures"])} measures, fields={sorted(payload)}')
+          PYJSON
       - uses: gradle/actions/setup-gradle@v4
       - name: Test libraries and assemble Android and Desktop
         run: |
