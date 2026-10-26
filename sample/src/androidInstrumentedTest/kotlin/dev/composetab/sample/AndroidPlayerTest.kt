@@ -69,9 +69,6 @@ class AndroidPlayerTest {
             more.click()
             device.findObject(UiSelector().text("Settings")).click()
             val source = device.findObject(UiSelector().textContains("original-study.gp4"))
-            // Settings is scrollable; the imported source is in its details section.
-            val scroll = androidx.test.uiautomator.UiScrollable(UiSelector().scrollable(true))
-            if (!source.exists()) scroll.scrollTextIntoView("original-study.gp4")
             assertTrue("Imported file must replace the bundled source", source.waitForExists(5_000))
             device.pressBack()
             val play = device.findObject(UiSelector().text("Play"))

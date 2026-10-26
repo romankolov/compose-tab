@@ -25,7 +25,7 @@ private val Ink = Color(0xFF26352F)
 @OptIn(ExperimentalResourceApi::class)
 @Composable
 fun App(initialView: String = "both", services: SampleServices? = null, onLoaded: (Result<Unit>) -> Unit = {}) {
-    MaterialTheme(colorScheme = lightColorScheme(primary = Green, secondary = Green, background = Color(0xFFFFFEFA), surface = Color(0xFFFFFEFA), onSurface = Ink)) {
+    MaterialTheme(colorScheme = lightColorScheme(primary = Green, secondary = Green, primaryContainer = Color(0xFFE3ECE3), secondaryContainer = Color(0xFFE3ECE3), onSecondaryContainer = Ink, surfaceTint = Green, background = Color(0xFFFFFEFA), surface = Color(0xFFFFFEFA), onSurface = Ink)) {
         var song by remember { mutableStateOf<SampleSong?>(null) }
         var error by remember { mutableStateOf<String?>(null) }
         var busy by remember { mutableStateOf(true) }
@@ -157,12 +157,15 @@ private fun Studio(song: SampleSong?, initialView: String, services: SampleServi
             }
         }
     }
-    if (settings) ModalBottomSheet(onDismissRequest = { settings = false }) {
-        Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    if (settings) ModalBottomSheet(onDismissRequest = { settings = false },
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
+        Column(Modifier.fillMaxWidth().heightIn(max = 600.dp).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Text("Score settings", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
                 TextButton(onClick = { settings = false }) { Text("Done") }
             }
+            Text(song?.source.orEmpty(), style = MaterialTheme.typography.bodySmall)
+            Text(source.composer, style = MaterialTheme.typography.bodySmall)
             Text("Track", style = MaterialTheme.typography.labelLarge)
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) { source.tracks.forEach { item ->
                 FilterChip(selected = trackId == item.id, onClick = { trackId = item.id }, label = { Text(item.name) })
@@ -184,8 +187,6 @@ private fun Studio(song: SampleSong?, initialView: String, services: SampleServi
             }
             TextButton(onClick = { state.zoomTo(1f); state.scrollTo(0f); state.scrollVerticallyTo(0f) }) { Text("Reset viewport") }
             HorizontalDivider()
-            Text(source.composer, style = MaterialTheme.typography.bodySmall)
-            Text(song?.source.orEmpty(), style = MaterialTheme.typography.bodySmall)
             Text(if (transport != null) status.message else "UI-only preview on this platform", style = MaterialTheme.typography.bodySmall)
             song?.warnings?.forEach { Text(it, style = MaterialTheme.typography.bodySmall) }
         }
