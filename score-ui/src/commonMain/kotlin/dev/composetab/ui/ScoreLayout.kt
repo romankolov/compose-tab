@@ -45,6 +45,7 @@ internal data class ScoreLayout(
 /** Conventional simple-meter beats or compound-meter dotted beats. Explicit custom beam
  * grouping (e.g. asymmetric 7/8) can replace this policy without changing rendering. */
 internal fun beamSegments(beats: List<PlacedBeat>, time: TimeSignature): List<BeamSegment> {
+    val rhythm = beats.filter { it.beat.grace == null }
     val groupLength = if (time.denominator == 8 && time.numerator > 3 && time.numerator % 3 == 0) 1.5f
         else 4f / time.denominator
     fun levels(b: PlacedBeat): Int = if (b.beat.isRest || b.beat.grace != null) 0 else when (b.beat.duration) {
@@ -53,10 +54,10 @@ internal fun beamSegments(beats: List<PlacedBeat>, time: TimeSignature): List<Be
     fun connected(a: PlacedBeat, b: PlacedBeat, level: Int): Boolean =
         levels(a) > level && levels(b) > level && floor((a.onset + .0001f) / groupLength) == floor((b.onset + .0001f) / groupLength)
     return buildList {
-        beats.forEachIndexed { index, beat ->
+        rhythm.forEachIndexed { index, beat ->
             repeat(levels(beat)) { level ->
-                val next = beats.getOrNull(index + 1)
-                val previous = beats.getOrNull(index - 1)
+                val next = rhythm.getOrNull(index + 1)
+                val previous = rhythm.getOrNull(index - 1)
                 when {
                     next != null && connected(beat, next, level) -> add(BeamSegment(beat.x + 4, next.x + 4, level))
                     previous != null && connected(previous, beat, level) -> Unit // Already connected from the left.

@@ -42,7 +42,11 @@ object TabScoreAdapter {
                 var offset = 0.0
                 v.beats.mapIndexedNotNull { bi, b ->
                     val bp = "$mp.voices[$vi].beats[$bi]"
-                    val grace = when (val value = b.source["graceNote"]?.jsonPrimitive?.contentOrNull) {
+                    val graceValue = b.source["graceNote"]
+                    val placement = if (graceValue == null || graceValue == JsonNull) null else
+                        (graceValue as? JsonPrimitive)?.takeIf { it.isString }?.content
+                            ?: fail("$bp.graceNote", "expected grace placement string")
+                    val grace = when (val value = placement) {
                         null -> null
                         "onBeat" -> GraceKind.OnBeat
                         "beforeBeat" -> GraceKind.BeforeBeat

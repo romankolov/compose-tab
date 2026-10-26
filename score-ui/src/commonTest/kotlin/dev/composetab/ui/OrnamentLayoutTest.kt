@@ -23,6 +23,13 @@ class OrnamentLayoutTest {
         val target = layout.targets.first { it.event.noteId == "g" }
         assertEquals("g", layout.hitTest(target.bounds.center)?.event?.noteId)
     }
+    @Test fun graceDoesNotBreakMetricalBeamGroup() {
+        val main = Beat("b", Duration.Eighth, notes = listOf(Note("n", 64, 1, 0, 0)))
+        val beats = listOf(PlacedBeat(main, 80f, 0f),
+            PlacedBeat(main.copy(id = "g", grace = GraceKind.BeforeBeat), 100f, .5f),
+            PlacedBeat(main.copy(id = "next"), 120f, .5f))
+        assertEquals(listOf(BeamSegment(84f, 124f, 0)), beamSegments(beats, TimeSignature()))
+    }
     @Test fun tiesSplitAcrossWrappedSystemsForStaffAndTab() {
         val layout = layoutScore(data(), ScoreStyle(layoutMode = ScoreLayoutMode.Vertical), 350f)
         assertTrue(layout.measures[1].y > layout.measures[0].y)
