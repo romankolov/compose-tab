@@ -60,6 +60,15 @@ class TabJsonTest {
         assertFailsWith<TabParseException> { parser.parse("{") }
         assertFailsWith<TabParseException> { parser.parse(track("""{"type":"8","notes":[]}""")) }
     }
+    @Test fun sourceIndicesSurviveRestPlaceholders() {
+        val result = TabScoreAdapter.adapt(parser.parse(track("""{"notes":[{"rest":true},{"string":0,"fret":0}]}""")))
+        val note = result.score.tracks[0].measures[0].beats[0].notes[0]
+        assertEquals(1, result.locations.getValue(note.id).note)
+    }
+    @Test fun nestingLimitIncludesUnknownExtensionsButNotStringContent() {
+        assertFailsWith<TabParseException> { TabJsonParser(TabParseLimits(maxDepth = 2)).parse("""{"extra":[[[]]]}""") }
+        assertNotNull(parser.parse(track("""{"notes":[],"text":"[[[[{{{{"}""")))
+    }
     @Test fun enforcesLimits() {
         assertFailsWith<TabParseException> { TabJsonParser(TabParseLimits(maxCharacters = 1)).parse("{}") }
         assertFailsWith<TabParseException> { TabJsonParser(TabParseLimits(maxBeats = 1)).parse(track("""{"notes":[]},{"notes":[]}""")) }

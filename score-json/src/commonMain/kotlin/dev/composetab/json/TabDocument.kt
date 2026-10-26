@@ -12,11 +12,11 @@ data class TabBeat(
     val type: Int, val dotted: Boolean, val durationQuarters: Double,
     val notes: List<TabNote>, val source: JsonObject,
 )
-data class TabNote(val string: Int, val fret: Int, val source: JsonObject)
+data class TabNote(val string: Int, val fret: Int, val source: JsonObject, val sourceIndex: Int = 0)
 
 class TabParseException(val path: String, detail: String, cause: Throwable? = null) :
     IllegalArgumentException("$path: $detail", cause)
 
-data class TabParseLimits(val maxCharacters: Int = 8 * 1024 * 1024, val maxBeats: Int = 200_000) {
-    init { require(maxCharacters > 0 && maxBeats > 0) }
+data class TabParseLimits(val maxCharacters: Int = 8 * 1024 * 1024, val maxBeats: Int = 200_000, val maxDepth: Int = 128) {
+    init { require(maxCharacters > 0 && maxBeats > 0 && maxDepth > 0) }
 }

@@ -35,10 +35,10 @@ object TabScoreAdapter {
                     }
                     val bid = "$mid:v$vi:b$bi"
                     locations[bid] = TabSourceLocation(mi, vi, bi)
-                    val notes = b.notes.mapIndexed { ni, n ->
-                        val np = "$bp.notes[$ni]"
-                        val nid = "$bid:n$ni"
-                        locations[nid] = TabSourceLocation(mi, vi, bi, ni)
+                    val notes = b.notes.map { n ->
+                        val np = "$bp.notes[${n.sourceIndex}]"
+                        val nid = "$bid:n${n.sourceIndex}"
+                        locations[nid] = TabSourceLocation(mi, vi, bi, n.sourceIndex)
                         val midi = document.tuning[n.string] + n.fret
                         val effects = mutableListOf<Effect>()
                         fun flag(key: String, effect: Effect) { if (n.source.flag(key, np)) effects += effect }

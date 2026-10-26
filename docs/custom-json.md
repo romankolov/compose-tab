@@ -25,7 +25,7 @@ For a minimal integration: `ScoreState(TabJsonParser().parse(jsonText).toScoreDa
 Prefer the result API when you want diagnostics and source mapping. Catch `TabParseException`;
 its `path` identifies invalid structure, types, tuning, pitch, chord or duration data.
 Run parsing off the UI thread for large inputs. Defaults limit text to 8 Mi characters and
-200,000 beats; override with `TabParseLimits`. JSON syntax is strict; unknown fields are retained.
+200,000 beats and 128 nesting levels; override with `TabParseLimits`. JSON syntax is strict; unknown fields are retained.
 The source model types are `TabDocument`, `TabMeasure`, `TabVoice`, `TabBeat`, `TabNote`.
 
 ## Source contract

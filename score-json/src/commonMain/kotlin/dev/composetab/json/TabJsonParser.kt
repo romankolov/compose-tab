@@ -7,6 +7,21 @@ import kotlinx.serialization.json.*
 class TabJsonParser(private val limits: TabParseLimits = TabParseLimits()) {
     fun parse(text: String): TabDocument {
         if (text.length > limits.maxCharacters) fail("$", "document exceeds character limit")
+        // Bound nesting before building the JSON tree, including in unknown extensions.
+        var depth = 0
+        var quoted = false
+        var escaped = false
+        for (c in text) {
+            if (quoted) {
+                if (escaped) escaped = false
+                else if (c == '\\') escaped = true
+                else if (c == '"') quoted = false
+            } else when (c) {
+                '"' -> quoted = true
+                '{', '[' -> if (++depth > limits.maxDepth) fail("$", "document exceeds nesting limit")
+                '}', ']' -> depth--
+            }
+        }
         val root = try { Json.parseToJsonElement(text).obj("$") }
         catch (e: SerializationException) { throw TabParseException("$", "invalid JSON", e) }
         val tuning = root.array("tuning", "$").mapIndexed { i, v ->
@@ -58,7 +73,7 @@ class TabJsonParser(private val limits: TabParseLimits = TabParseLimits()) {
                             val fret = n["fret"]?.integer("$np.fret") ?: fail("$np.fret", "missing fret")
                             if (string !in tuning.indices) fail("$np.string", "string index outside tuning")
                             if (fret < 0 || tuning[string].toLong() + fret > 127) fail("$np.fret", "fret yields invalid MIDI pitch")
-                            TabNote(string, fret, n)
+                            TabNote(string, fret, n, ni)
                         }
                     }
                     if (notes.map { it.string }.distinct().size != notes.size) fail("$bp.notes", "duplicate string in chord")
