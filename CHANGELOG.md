@@ -2,6 +2,11 @@
 
 ## 0.3.0
 
+- Compact, adjustable tab string/system spacing with headless downward rhythm
+  beams by default; optional legacy note heads and rhythm visibility controls.
+- Connected legato runs, taller bend arrows with hold/release, zigzag vibrato and
+  harmonic diamonds. Dead notes/percussive slaps render as x, including GP mapping.
+
 - Note-local tab hammer/pull/bend visuals, ghost fret parentheses, harmonic fret
   brackets/types, chord strum arrows, and independent tab string spacing.
 - Animated playback-follow scrolling, cancellable by manual navigation.

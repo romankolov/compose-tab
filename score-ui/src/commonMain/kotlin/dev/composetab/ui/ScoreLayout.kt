@@ -38,7 +38,8 @@ internal data class ScoreLayout(
     }
 
     fun hitTest(point: Offset): NoteTarget? = visibleMeasures(point.x - 14, point.y - 12, point.x + 14, point.y + 12)
-        .asReversed().firstNotNullOfOrNull { measure -> measure.targets.lastOrNull { it.bounds.contains(point) } }
+        .asSequence().flatMap { it.targets.asSequence() }.filter { it.bounds.contains(point) }
+        .minByOrNull { (it.bounds.center - point).getDistanceSquared() }
 }
 
 /** Conventional simple-meter beats or compound-meter dotted beats. Explicit custom beam

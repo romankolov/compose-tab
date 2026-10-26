@@ -44,4 +44,7 @@ second[0].notes[0].type = models.NoteType.dead
 second[1].effect.slapEffect = models.SlapEffect.slapping
 second[2].notes[0].effect.bend = models.BendEffect(type=models.BendType.bendRelease, value=50,
     points=[models.BendPoint(0, 0), models.BendPoint(30, 2), models.BendPoint(60, 0)])
+# A bar with sixteenth-note subdivisions demonstrates the headless double beams.
+for beat in song.tracks[0].measures[2].voices[0].beats:
+    beat.duration.value = 16
 guitarpro.write(song, str(folder / 'effects.gp5'), version=(5, 1, 0))

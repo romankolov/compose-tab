@@ -178,11 +178,22 @@ Prerequisites: JDK 17, Android SDK 35 for Android targets; macOS/Xcode for iOS.
   notation/tab, zoom, theme and highlight controls. Song/file details and player
   diagnostics are there too, rather than occupying the score viewport.
 - Hammer-on/pull-off arcs and bend arrows are anchored to the affected tab fret,
-  not the top of the staff. Ghost frets use `(5)`, harmonics use `<12>` (with
-  artificial/tapped/pinch/semi labels where appropriate), and `Beat.strum` draws
-  an up/down arrow beside the chord. Customize `ScoreStyle.tabStringSpacing`
-  (default 24 logical units) to reserve articulation space independently of staff
-  spacing. The sample preserves these effects from actual TuxGuitar decoding.
+  not the top of the staff. Connected legato runs use a single slur; optional H/P
+  labels can be enabled. Bends use taller curves and filled arrows, with decoded
+  hold/release information and zigzag vibrato. Ghost frets use `(5)`, natural
+  harmonics `<12>`, and other harmonics a diamond prefix plus a type label.
+  `Effect.DeadNote` and `Effect.Slap` render percussive string hits as `x`.
+  `Beat.strum` draws up/down arrows beside chords. The sample preserves these
+  flags from actual TuxGuitar decoding.
+- Tab-only rhythm defaults to **stem-and-beam guides without oval note heads**,
+  below the strings. `ScoreStyle.tabRhythmStyle = TabRhythmStyle.Notes` restores
+  the previous note-headed style; `showTabRhythm = false` hides the guide.
+  This changes tab-only rhythm, not normal staff notation.
+- Tab height is adjustable independently of notation: `tabStringSpacing` defaults
+  to 18 logical units and `tabSystemSpacing` to 52. **More → Settings** exposes both
+  sliders, rhythm style/visibility and optional H/P labels. Tab-only systems no
+  longer retain the notation system's large minimum height. Hit tests and cursor
+  bounds use the same spacing, including nearest-string selection in tight tabs.
 - Playback-follow pans animate the actual viewport over 280 ms, retaining correct
   culling/hit testing throughout. Dragging/wheeling interrupts follow; re-enable
   **More → Follow cursor** to resume. The host still owns the playback clock.

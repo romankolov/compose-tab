@@ -98,4 +98,15 @@ class ScoreLayoutTest {
         assertFailsWith<IllegalArgumentException> { compact.copy(tabSystemSpacing = Float.NaN) }
     }
 
+    @Test fun tightTabSpacingSelectsTheNearestString() {
+        val notes = listOf(Note("upper", 64, 1, 0, 0), Note("lower", 59, 2, 0, 0))
+        val data = ScoreData("Close strings", tracks = listOf(Track("t", "Guitar", measures = listOf(
+            Measure("m", 1, beats = listOf(Beat("b", notes = notes)))
+        ))))
+        val layout = layoutScore(data, ScoreStyle(showStaff = false, showTabRhythm = false, tabStringSpacing = 10f))
+        val upper = layout.targets.first { it.event.noteId == "upper" }.bounds.center
+        assertEquals("upper", layout.hitTest(upper)?.event?.noteId)
+        assertEquals("lower", layout.hitTest(upper + androidx.compose.ui.geometry.Offset(0f, 10f))?.event?.noteId)
+    }
+
 }

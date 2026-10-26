@@ -301,9 +301,10 @@ fun ScoreComposable(
                                 Effect.Vibrato -> {
                                     val bend = note.effects.filterIsInstance<Effect.Bend>().firstOrNull()
                                     val waveY = (if (style.showTab) ty else ny) - if (bend != null) 50f + bend.semitones.coerceAtMost(2f) * 8f else 22f
+                                    val waveX = if (bend != null) bx + 3 + (effectEnd - bx - 14).coerceIn(18f, 42f) else bx - 4
                                     val wave = Path().apply {
-                                        moveTo(bx, waveY)
-                                        repeat(12) { i -> lineTo(bx + (i + 1) * 3f, waveY + if (i % 2 == 0) -2.5f else 2.5f) }
+                                        moveTo(waveX, waveY)
+                                        repeat(12) { i -> lineTo(waveX + (i + 1) * 3f, waveY + if (i % 2 == 0) -2.5f else 2.5f) }
                                     }
                                     drawPath(wave, style.ink, style = Stroke(2f))
                                 }
@@ -318,7 +319,7 @@ fun ScoreComposable(
                                     if (effect.kind != HarmonicKind.Natural) label(when (effect.kind) {
                                         HarmonicKind.Artificial -> "A.H."; HarmonicKind.Tapped -> "T.H."
                                         HarmonicKind.Pinch -> "P.H."; HarmonicKind.Semi -> "S.H."; else -> "N.H."
-                                    }, bx + 9, effectY - 1, 8f)
+                                    }, bx - 8, effectY - 14, 10f, true)
                                 }
                             }
                             onDrawEffect?.invoke(this, effect, Offset(bx, effectY), style)
