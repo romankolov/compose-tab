@@ -207,11 +207,18 @@ fun ScoreComposable(
                     label("${measure.time.denominator}", x + 14, y + 20, 17f)
                 }
                 if (style.showTab) { lines(tabY, track.tuning.size, tabGap); label("TAB", x + 4, tabY + 17, 10f, true) }
-                if (measure.repeatStart || measure.repeatEnd) {
-                    val rx = if (measure.repeatStart) x + 3 else x + placed.width - 5
-                    val top = if (style.showStaff) y else tabY
-                    drawLine(style.ink, Offset(rx, top), Offset(rx, top + 4 * gap), 2.5f)
-                    repeat(2) { drawCircle(style.ink, 1.8f, Offset(rx + if (measure.repeatStart) 6 else -6, top + (1.5f + it) * gap)) }
+                fun drawRepeat(rx: Float, start: Boolean, span: RepeatSpan) {
+                    drawLine(style.ink, Offset(rx, span.top), Offset(rx, span.bottom), 2.5f)
+                    listOf(span.upperDot, span.lowerDot).forEach { dotY ->
+                        drawCircle(style.ink, 1.8f, Offset(rx + if (start) 6 else -6, dotY))
+                    }
+                }
+                listOf(true, false).forEach { start ->
+                    if (if (start) measure.repeatStart else measure.repeatEnd) {
+                        val rx = if (start) x + 3 else x + placed.width - 5
+                        if (style.showStaff) drawRepeat(rx, start, repeatSpan(y, 5, gap))
+                        if (style.showTab) drawRepeat(rx, start, repeatSpan(tabY, track.tuning.size, tabGap))
+                    }
                 }
                 // Erase tab line segments first; highlights then remain visible behind fret text.
                 if (style.showTab) beats.forEach { placedBeat -> placedBeat.beat.notes.forEach { note ->
@@ -234,6 +241,12 @@ fun ScoreComposable(
                             if (beat.dotted) drawCircle(style.ink, 1.6f, Offset(bx + 10, if (tabRhythm) rhythmY - 2 else y + 1.5f * gap))
                         }
                         if (style.showTab) label("–", bx - 4, tabY + 16, 13f, true)
+                    }
+                    // Harmonic captions belong above the whole tab, never on another string.
+                    val caption = harmonicCaption(beat.notes)
+                    if (caption.isNotEmpty()) {
+                        val captionWidth = text.measure(caption, TextStyle(fontSize = (10f / (density * fontScale)).sp)).size.width.toFloat()
+                        label(caption, bx - captionWidth / 2, (if (style.showTab) tabY else y) - 26f, 10f, true)
                     }
                     beat.notes.forEach { note ->
                         val ny = y + 4 * gap - note.staffStep * gap / 2
@@ -288,12 +301,17 @@ fun ScoreComposable(
                                         ?.beat?.notes?.firstOrNull { it.string == note.string }
                                     if (previous?.effects?.any { it == Effect.HammerOn || it == Effect.PullOff } != true) {
                                         var end = effectEnd
+                                        var endNote = note
                                         for (next in beats.drop(index + 1).filter { it.onset > beats[index].onset }) {
                                             val n = next.beat.notes.firstOrNull { it.string == note.string } ?: break
                                             end = next.x
+                                            endNote = n
                                             if (n.effects.none { it == Effect.HammerOn || it == Effect.PullOff }) break
                                         }
-                                        val arc = Path().apply { moveTo(bx + 7, effectY + 8); quadraticTo((bx + end) / 2, effectY - 10, end - 7, effectY + 8) }
+                                        fun fretWidth(n: Note) = text.measure(tabFretLabel(n), TextStyle(fontSize = (13f / (density * fontScale)).sp)).size.width.toFloat()
+                                        val (left, right) = legatoEdges(bx, if (style.showTab) fretWidth(note) else 10f,
+                                            end, if (style.showTab) fretWidth(endNote) else 10f)
+                                        val arc = Path().apply { moveTo(left, effectY + 3); quadraticTo((left + right) / 2, effectY - 15, right, effectY + 3) }
                                         drawPath(arc, style.ink, style = Stroke(1.3f))
                                         if (style.showLegatoLabels) label(if (effect == Effect.HammerOn) "H" else "P", (bx + end) / 2 - 3, effectY - 11, 9f)
                                     }
@@ -316,10 +334,7 @@ fun ScoreComposable(
                                         val diamond = Path().apply { moveTo(bx, ny - 6); lineTo(bx + 6, ny); lineTo(bx, ny + 6); lineTo(bx - 6, ny); close() }
                                         drawPath(diamond, style.ink, style = Stroke(1f))
                                     }
-                                    if (effect.kind != HarmonicKind.Natural) label(when (effect.kind) {
-                                        HarmonicKind.Artificial -> "A.H."; HarmonicKind.Tapped -> "T.H."
-                                        HarmonicKind.Pinch -> "P.H."; HarmonicKind.Semi -> "S.H."; else -> "N.H."
-                                    }, bx - 8, effectY - 14, 10f, true)
+
                                 }
                             }
                             onDrawEffect?.invoke(this, effect, Offset(bx, effectY), style)
