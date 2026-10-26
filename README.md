@@ -297,3 +297,13 @@ The separate [`score-json`](docs/custom-json.md) multiplatform module reads cust
 with tuning, measures, voices, rational timing and zero-based string/fret data, then adapts it
 to `ScoreData`. It preserves the source metadata and reports unsupported engraving without
 adding decoding dependencies to `score-ui`. See the guide for integration and limitations.
+
+### Ties and grace notes
+
+Use `Note(tieFrom = sourceNoteId, ...)` for an incoming same-pitch/string sustain.
+The Canvas renders ties across measures and wrapped systems in staff notation and tab.
+Use `Beat(grace = GraceKind.BeforeBeat, ...)` (slashed) or `GraceKind.OnBeat` (unslashed)
+for small, individually selectable ornaments. `metricalDurationQuarters` is zero for
+grace beats; their nominal `durationQuarters` still controls engraving. The default
+`ScoreTimeline` excludes grace beats; hosts can supply an explicit performance timeline.
+The optional JSON adapter maps `tie` and `graceNote` into these decoder-independent fields.

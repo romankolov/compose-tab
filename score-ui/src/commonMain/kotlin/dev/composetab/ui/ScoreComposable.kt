@@ -405,10 +405,13 @@ fun ScoreComposable(
                     }
                 }
                 placed.ties.forEach { tie ->
-                    drawPath(Path().apply {
-                        moveTo(tie.from.x, tie.from.y)
-                        quadraticTo((tie.from.x + tie.to.x) / 2, maxOf(tie.from.y, tie.to.y) + 13f, tie.to.x, tie.to.y)
-                    }, style.ink, style = Stroke(1.2f))
+                    clipRect(left = placed.x, right = placed.x + placed.width,
+                        top = minOf(tie.from.y, tie.to.y) - 1, bottom = maxOf(tie.from.y, tie.to.y) + 15) {
+                        drawPath(Path().apply {
+                            moveTo(tie.from.x, tie.from.y)
+                            quadraticTo((tie.from.x + tie.to.x) / 2, maxOf(tie.from.y, tie.to.y) + 13f, tie.to.x, tie.to.y)
+                        }, style.ink, style = Stroke(1.2f))
+                    }
                 }
                 if (style.showStaff || tabRhythm) placed.beams.forEach { beam ->
                     val bare = tabRhythm && style.tabRhythmStyle == TabRhythmStyle.Beams

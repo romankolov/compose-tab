@@ -16,16 +16,20 @@ internal fun withTies(rows: List<List<PlacedMeasure>>, style: ScoreStyle): List<
             val source = target.note.tieFrom?.let { anchors[it] } ?: return@forEach
             val first = indices.getValue(source.measure.measure.id)
             val last = indices.getValue(target.measure.measure.id)
-            for (i in first..last) {
-                val m = track[i]
+            // One curve per system; identical clipped fragments meet smoothly at barlines.
+            (first..last).groupBy { track[it].y }.values.forEach { group ->
+                val startMeasure = track[group.first()]
+                val endMeasure = track[group.last()]
                 fun fragment(tab: Boolean) {
-                    fun ny(n: Note): Float = if (tab) m.y + m.tabOffset + (n.string - 1) * style.tabStringSpacing + 8f
-                        else m.y + 4 * style.lineSpacing - n.staffStep * style.lineSpacing / 2 + 6f
+                    fun ny(n: Note): Float = if (tab) startMeasure.y + startMeasure.tabOffset + (n.string - 1) * style.tabStringSpacing + 8f
+                        else startMeasure.y + 4 * style.lineSpacing - n.staffStep * style.lineSpacing / 2 + 6f
                     fun pad(n: Note) = if (tab) tabFretLabel(n).length * 3.5f + 2 else 7f
-                    val left = if (i == first) source.beat.x + pad(source.note) else m.x + 24f
-                    val right = if (i == last) target.beat.x - pad(target.note) else m.x + m.width - 3f
-                    if (right > left) fragments.getOrPut(m.measure.id) { mutableListOf() } +=
-                        TieSegment(Offset(left, ny(source.note)), Offset(right, ny(target.note)))
+                    val left = if (group.first() == first) source.beat.x + pad(source.note) else startMeasure.x + 24f
+                    val right = if (group.last() == last) target.beat.x - pad(target.note) else endMeasure.x + endMeasure.width - 3f
+                    if (right > left) {
+                        val segment = TieSegment(Offset(left, ny(source.note)), Offset(right, ny(target.note)))
+                        group.forEach { i -> fragments.getOrPut(track[i].measure.id) { mutableListOf() } += segment }
+                    }
                 }
                 if (style.showStaff) fragment(false)
                 if (style.showTab) fragment(true)

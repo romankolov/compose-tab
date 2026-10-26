@@ -63,8 +63,15 @@ One document describes **one track**, not a whole multitrack song:
 - Supported effects: `dead`, `ghost`, `vibrato`, `palmMute`, named harmonic kinds and
   outgoing `hp` (direction determined by the following same-string fret). Up/down strokes
   are mapped from beat `upStroke` / `downStroke` fields.
-- Grace beats remain parsed but are omitted from score timing and drawing with a warning.
-  Ties remain separate source notes, not merged or engraved; they produce warnings.
+- `graceNote: "beforeBeat"` / `"onBeat"` becomes `Beat.grace`. Grace notes/rests are
+  drawn small with separate stems (a slash for before-beat graces), retain selectable IDs,
+  and do not advance the measure or automatic timeline. Performance-time stealing is
+  owned by the host audio engine, not the UI library.
+- Incoming note `tie: true` resolves to `Note.tieFrom` using the preceding same-string,
+  same-pitch/fret note in the same voice, including across barlines. Unresolvable ties
+  emit a warning rather than a false connection. Ties render in notation and tab with
+  continuations at wrapped systems; the continuation keeps its note ID and duration.
+  Hosts must not re-attack notes with `tieFrom != null` when generating audio.
 - Bends/slides/slaps, staccato, text/chords, let-ring and tuplet captions currently remain
   in source metadata with warnings rather than inventing effect semantics/units.
 - Automations, repeat metadata, markers, instrument data, sound changes, beam hints and
