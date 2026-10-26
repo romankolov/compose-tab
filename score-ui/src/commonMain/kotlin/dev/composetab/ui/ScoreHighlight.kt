@@ -29,7 +29,7 @@ internal fun measureHighlights(
                 val right = if (appearance.shape == HighlightShape.VerticalLine) beat.x + appearance.lineWidth / 2 else next - 14f
                 add(ScoreHighlight(kind, Rect(left, placed.y - 16f, right, bottom), appearance, beatId = beat.beat.id))
             }
-        } else placed.targets.filter { it.event.noteId in ids }.forEach { target ->
+        } else placed.targets.filter { it.event.noteId in ids && (!it.rhythm || style.tabRhythmStyle == TabRhythmStyle.Notes) }.forEach { target ->
             add(ScoreHighlight(kind, target.bounds.inflate(appearance.padding), appearance, target.event.noteId, target.event.beatId, target.event.tablature))
         }
     }

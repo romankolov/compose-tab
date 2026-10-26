@@ -109,4 +109,14 @@ class ScoreLayoutTest {
         assertEquals("lower", layout.hitTest(upper + androidx.compose.ui.geometry.Offset(0f, 10f))?.event?.noteId)
     }
 
+    @Test fun bareRhythmHighlightsFretsWithoutPhantomNoteHeads() {
+        val style = ScoreStyle(showStaff = false, tabRhythmStyle = TabRhythmStyle.Beams)
+        val data = score()
+        val placed = layoutScore(data, style).measures.single()
+        assertTrue(placed.targets.any { it.rhythm }) // Rhythm remains clickable.
+        assertEquals(1, measureHighlights(placed, setOf("n"), null, style).size)
+        val legacy = style.copy(tabRhythmStyle = TabRhythmStyle.Notes)
+        assertEquals(2, measureHighlights(layoutScore(data, legacy).measures.single(), setOf("n"), null, legacy).size)
+    }
+
 }

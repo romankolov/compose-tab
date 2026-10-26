@@ -6,7 +6,7 @@ import dev.composetab.model.*
 import kotlin.math.floor
 import kotlin.math.max
 
-internal data class NoteTarget(val bounds: Rect, val event: ScoreEvent.NoteSelected)
+internal data class NoteTarget(val bounds: Rect, val event: ScoreEvent.NoteSelected, val rhythm: Boolean = false)
 internal data class PlacedBeat(val beat: Beat, val x: Float, val onset: Float)
 internal data class BeamSegment(val from: Float, val to: Float, val level: Int)
 internal data class PlacedMeasure(
@@ -129,14 +129,14 @@ internal fun layoutScore(data: ScoreData, style: ScoreStyle, viewportWidth: Floa
                 val bx = x + 54f + distinctOnsets.binarySearch(onset) * spacing + onset / total * extraSpace
                 beat.notes.forEach { note ->
                     require(note.string <= track.tuning.size) { "Note ${note.id} uses a string outside track tuning" }
-                    fun target(ny: Float, tab: Boolean) {
+                    fun target(ny: Float, tab: Boolean, rhythm: Boolean = false) {
                         targets += NoteTarget(Rect(Offset(bx - 13, ny - 11), Offset(bx + 13, ny + 11)),
-                            ScoreEvent.NoteSelected(track.id, measure.id, beat.id, note.id, tab))
+                            ScoreEvent.NoteSelected(track.id, measure.id, beat.id, note.id, tab), rhythm)
                     }
                     if (style.showStaff) target(y + 4 * style.lineSpacing - note.staffStep * style.lineSpacing / 2, false)
                     if (style.showTab) target(y + tabOffset + (note.string - 1) * style.tabStringSpacing, true)
                     if (style.showTab && !style.showStaff && style.showTabRhythm)
-                        target(y + (track.tuning.size - 1) * style.tabStringSpacing + 50f, true)
+                        target(y + (track.tuning.size - 1) * style.tabStringSpacing + 50f, true, rhythm = true)
                 }
                 PlacedBeat(beat, bx, onset)
             }.sortedBy { it.onset }
