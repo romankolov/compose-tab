@@ -234,8 +234,15 @@ fun ScoreComposable(
                     if (beat.grace != null) {
                         // Ornaments have their own small glyphs/stems, never join metrical beams.
                         fun smallStem(baseY: Float) {
+                            if (beat.duration == Duration.Whole) return
                             drawLine(style.ink, Offset(bx + 3, baseY), Offset(bx + 3, baseY - 20), .9f)
-                            drawPath(Path().apply { moveTo(bx + 3, baseY - 20); quadraticTo(bx + 12, baseY - 15, bx + 6, baseY - 10) }, style.ink, style = Stroke(.9f))
+                            val flags = when (beat.duration) {
+                                Duration.Eighth -> 1; Duration.Sixteenth -> 2; Duration.ThirtySecond -> 3; else -> 0
+                            }
+                            repeat(flags) { flag ->
+                                val top = baseY - 20 + flag * 4
+                                drawPath(Path().apply { moveTo(bx + 3, top); quadraticTo(bx + 12, top + 5, bx + 6, top + 10) }, style.ink, style = Stroke(.9f))
+                            }
                             if (beat.grace == GraceKind.BeforeBeat) drawLine(style.ink, Offset(bx - 1, baseY - 11), Offset(bx + 9, baseY - 18), 1f)
                         }
                         if (beat.isRest) {
@@ -251,7 +258,8 @@ fun ScoreComposable(
                                 val gy = y + 4 * gap - note.staffStep * gap / 2
                                 if (note.staffStep < 0) for (step in -2 downTo note.staffStep step 2) drawLine(style.ink, Offset(bx - 5, y + 4 * gap - step * gap / 2), Offset(bx + 5, y + 4 * gap - step * gap / 2), .7f)
                                 if (note.staffStep > 8) for (step in 10..note.staffStep step 2) drawLine(style.ink, Offset(bx - 5, y + 4 * gap - step * gap / 2), Offset(bx + 5, y + 4 * gap - step * gap / 2), .7f)
-                                drawOval(style.ink, Offset(bx - 3, gy - 2), Size(6f, 4f))
+                                drawOval(style.ink, Offset(bx - 3, gy - 2), Size(6f, 4f),
+                                    style = if (beat.duration in listOf(Duration.Whole, Duration.Half)) Stroke(.9f) else Fill)
                                 note.accidental?.let { music(when (it) { Accidental.Sharp -> "\uE262"; Accidental.Flat -> "\uE260"; Accidental.Natural -> "\uE261" }, bx - 11, gy, 25f) }
                                 smallStem(gy)
                             }
@@ -262,6 +270,22 @@ fun ScoreComposable(
                                 label(fret, bx - width / 2, gy - 6, 9f)
                                 smallStem(gy - 4)
                             }
+                            val earlier = beats.take(index).any { it.onset == beats[index].onset && it.beat.grace != null &&
+                                it.beat.voice == beat.voice && it.beat.notes.any { n -> n.string == note.string } }
+                            val anchor = beats.drop(index + 1).firstOrNull { it.beat.grace == null && it.beat.voice == beat.voice && it.onset == beats[index].onset }
+                            val target = anchor?.beat?.notes?.firstOrNull { it.string == note.string }
+                            if (!earlier && anchor != null && target != null) {
+                                fun graceSlur(fromY: Float, toY: Float) {
+                                    drawPath(Path().apply { moveTo(bx + 4, fromY); quadraticTo((bx + anchor.x) / 2,
+                                        maxOf(fromY, toY) + 9, anchor.x - 6, toY) }, style.ink, style = Stroke(.9f))
+                                }
+                                if (style.showStaff) graceSlur(y + 4 * gap - note.staffStep * gap / 2 + 5,
+                                    y + 4 * gap - target.staffStep * gap / 2 + 6)
+                                if (style.showTab) graceSlur(tabY + (note.string - 1) * tabGap + 6,
+                                    tabY + (target.string - 1) * tabGap + 7)
+                            }
+                            note.effects.forEach { effect -> onDrawEffect?.invoke(this, effect,
+                                Offset(bx, (if (style.showTab) tabY + (note.string - 1) * tabGap else y + 4 * gap - note.staffStep * gap / 2) - 8), style) }
                         }
                         return@forEachIndexed
                     }
