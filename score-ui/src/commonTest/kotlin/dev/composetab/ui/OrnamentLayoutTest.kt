@@ -23,6 +23,16 @@ class OrnamentLayoutTest {
         val target = layout.targets.first { it.event.noteId == "g" }
         assertEquals("g", layout.hitTest(target.bounds.center)?.event?.noteId)
     }
+    @Test fun explicitGraceOffsetDoesNotAdvanceImplicitMetricalCursor() {
+        val base = data()
+        val track = base.tracks.single()
+        val first = track.measures.first()
+        val changed = first.copy(beats = first.beats.map { if (it.grace != null) it.copy(offsetQuarters = 1.0) else it })
+        val score = base.copy(tracks = listOf(track.copy(measures = listOf(changed) + track.measures.drop(1))))
+        val layout = layoutScore(score, ScoreStyle())
+        assertEquals(0f, layout.measures[0].beats.single { it.beat.id == "b0" }.onset)
+        assertEquals(0.0, ScoreTimeline.from(score).moments.first().startQuarter)
+    }
     @Test fun graceDoesNotBreakMetricalBeamGroup() {
         val main = Beat("b", Duration.Eighth, notes = listOf(Note("n", 64, 1, 0, 0)))
         val beats = listOf(PlacedBeat(main, 80f, 0f),

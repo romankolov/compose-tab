@@ -118,7 +118,7 @@ internal fun layoutScore(data: ScoreData, style: ScoreStyle, viewportWidth: Floa
             var elapsed = 0f
             val onsets = measure.beats.map { beat ->
                 val start = beat.offsetQuarters?.toFloat() ?: elapsed
-                elapsed = maxOf(elapsed, start + beat.metricalDurationQuarters)
+                if (beat.grace == null) elapsed = maxOf(elapsed, start + beat.metricalDurationQuarters)
                 start
             }
             val total = maxOf(elapsed, measure.lengthQuarters?.toFloat() ?: 0f, 1f)
