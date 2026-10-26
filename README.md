@@ -290,3 +290,10 @@ accepts a successful build run from the same branch and attaches **those exact
 artifacts** to a preview tag. It does not merge the PR or publish to mobile stores.
 
 Clefs: `Track.clef` supports treble, octave-transposing guitar treble (`Treble8vb`), and bass. Set `staffStep` from written pitch for transposing clefs; sounding MIDI is unchanged. The sample maps guitar to written octave-up treble and low four-string instruments to bass, and layout leaves extra room for low ledger lines before tablature.
+
+### Optional custom JSON parser
+
+The separate [`score-json`](docs/custom-json.md) multiplatform module reads custom track JSON
+with tuning, measures, voices, rational timing and zero-based string/fret data, then adapts it
+to `ScoreData`. It preserves the source metadata and reports unsupported engraving without
+adding decoding dependencies to `score-ui`. See the guide for integration and limitations.
