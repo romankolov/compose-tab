@@ -15,7 +15,7 @@ jobs:
     timeout-minutes: 30
     env:
       COMPOSE_TAB_SILENT: '1'
-      COMPOSE_TAB_JSON_SAMPLES: ${{ runner.temp }}/custom-tabs
+      COMPOSE_TAB_JSON_SAMPLES: /tmp/compose-tab-json-contracts
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-java@v5
