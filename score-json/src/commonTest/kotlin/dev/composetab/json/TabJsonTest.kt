@@ -44,9 +44,28 @@ class TabJsonTest {
     }
     @Test fun graceIsRetainedButDoesNotShiftMainBeat() {
         val result = TabScoreAdapter.adapt(parser.parse(track("""{"graceNote":"onBeat","type":64,"notes":[{"rest":true}]},{"type":4,"notes":[]}""")))
-        assertEquals(0.0, result.score.tracks[0].measures[0].beats.single().offsetQuarters)
-        assertEquals(2, result.document.measures[0].voices[0].beats.size)
-        assertTrue(result.warnings.any { it.message.contains("Grace") })
+        val beats = result.score.tracks[0].measures[0].beats
+        assertEquals(2, beats.size)
+        assertEquals(GraceKind.OnBeat, beats[0].grace)
+        assertEquals(0.0, beats[1].offsetQuarters)
+        assertEquals(0f, beats[0].metricalDurationQuarters)
+        assertTrue(result.warnings.none { it.message.contains("Grace") })
+    }
+    @Test fun tiesResolveAcrossBarlinesByVoiceAndString() {
+        val doc = parser.parse("""{"tuning":[64],"measures":[
+          {"voices":[{"beats":[{"type":1,"notes":[{"string":0,"fret":5}]}]}]},
+          {"voices":[{"beats":[{"type":1,"notes":[{"string":0,"fret":5,"tie":true}]}]}]}
+        ]}""")
+        val result = TabScoreAdapter.adapt(doc)
+        val measures = result.score.tracks[0].measures
+        assertEquals(measures[0].beats[0].notes[0].id, measures[1].beats[0].notes[0].tieFrom)
+        assertTrue(result.warnings.isEmpty())
+    }
+    @Test fun invalidTieAndGraceHaveUsefulDiagnostics() {
+        val result = TabScoreAdapter.adapt(parser.parse(track("""{"notes":[{"string":0,"fret":0,"tie":true}]}""")))
+        assertNull(result.score.tracks[0].measures[0].beats[0].notes[0].tieFrom)
+        assertTrue(result.warnings.single().path.endsWith(".tie"))
+        assertFailsWith<TabParseException> { parser.parse(track("""{"graceNote":"unknown","notes":[]}""")).toScoreData() }
     }
     @Test fun shortDurationsUseScaleWithoutLosingTiming() {
         val beat = parser.parse(track("""{"type":64,"duration":[1,64],"notes":[]}""")).toScoreData().tracks[0].measures[0].beats[0]

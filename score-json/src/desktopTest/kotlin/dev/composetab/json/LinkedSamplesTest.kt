@@ -15,7 +15,7 @@ class LinkedSamplesTest {
         assertTrue(document.measures.size > 20, "Must test the complete download, not an excerpt")
         val sourceBeats = document.measures.flatMap { it.voices }.flatMap { it.beats }
         val rendered = result.score.tracks.single().measures.flatMap { it.beats }
-        assertEquals(sourceBeats.count { it.source["graceNote"] == null }, rendered.size)
+        assertEquals(sourceBeats.size, rendered.size)
         assertTrue(rendered.flatMap { it.notes }.isNotEmpty())
         assertTrue(rendered.all { it.durationQuarters.isFinite() && it.durationQuarters > 0 })
         println("$file: ${document.measures.size} measures, ${sourceBeats.size} source beats, ${rendered.size} mapped beats, ${result.warnings.size} warnings")

@@ -9,6 +9,18 @@ data class ScoreData(val title: String, val composer: String = "", val tracks: L
         } }
         require(ids.all { it.isNotBlank() }) { "Score IDs must not be blank" }
         require(ids.size == ids.toSet().size) { "Score IDs must be globally unique" }
+        tracks.forEach { track ->
+            val previous = mutableMapOf<String, Note>()
+            track.measures.forEach { m -> m.beats.forEach { b -> b.notes.forEach { n ->
+                n.tieFrom?.let { id ->
+                    val source = previous[id]
+                    require(source != null && source.midi == n.midi && source.string == n.string) {
+                        "Tie ${n.id} must reference an earlier same-pitch, same-string note in its track"
+                    }
+                }
+                previous[n.id] = n
+            } } }
+        }
     }
 }
 data class Track(
@@ -27,6 +39,8 @@ data class Measure(
 ) {
     init { require(lengthQuarters == null || (lengthQuarters.isFinite() && lengthQuarters > 0)) }
 }
+enum class GraceKind { BeforeBeat, OnBeat }
+
 enum class Duration(val quarters: Float) {
     Whole(4f), Half(2f), Quarter(1f), Eighth(.5f), Sixteenth(.25f), ThirtySecond(.125f)
 }
@@ -38,13 +52,19 @@ data class Beat(
     val durationScale: Double = 1.0,
     /** Visual direction on the tab: Down is top string to bottom string. */
     val strum: StrumDirection? = null,
+    /** Ornament anchored to the next regular beat; does not consume metrical time. */
+    val grace: GraceKind? = null,
+    /** Decoder-owned voice identity, useful for ornaments and polyphonic notation. */
+    val voice: Int = 0,
 
 ) {
     init {
+        require(voice >= 0)
         require(offsetQuarters == null || (offsetQuarters.isFinite() && offsetQuarters >= 0))
         require(durationScale.isFinite() && durationScale > 0)
         require(durationQuarters.isFinite() && durationQuarters > 0)
         require(notes.map { it.string }.distinct().size == notes.size) { "A beat cannot contain two frets on the same string" } }
+    val metricalDurationQuarters: Float get() = if (grace == null) durationQuarters else 0f
     val isRest: Boolean get() = notes.isEmpty()
     val durationQuarters: Float get() = duration.quarters * (if (dotted) 1.5f else 1f) * durationScale.toFloat()
 }
@@ -55,6 +75,8 @@ enum class Accidental { Natural, Sharp, Flat }
 data class Note(
     val id: String, val midi: Int, val string: Int, val fret: Int,
     val staffStep: Int, val accidental: Accidental? = null, val effects: List<Effect> = emptyList(),
+    /** Incoming sustain from this note ID, not a hammer/pull slur or a new attack. */
+    val tieFrom: String? = null,
 ) { init { require(midi in 0..127); require(string > 0); require(fret >= 0); require(staffStep in -70..70) } }
 enum class StrumDirection { Up, Down }
 enum class HarmonicKind { Natural, Artificial, Tapped, Pinch, Semi }

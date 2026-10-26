@@ -21,6 +21,8 @@ object TabScoreAdapter {
         val warnings = mutableListOf<TabWarning>()
         val locations = mutableMapOf<String, TabSourceLocation>()
         val prefix = options.idPrefix
+        // Voice/string identity survives barlines; rests break continuity for incoming ties.
+        val preceding = mutableMapOf<Pair<Int, Int>, Note>()
         val measures = document.measures.mapIndexed { mi, m ->
             val mid = "$prefix:m$mi"
             val mp = "$.measures[$mi]"
@@ -40,10 +42,13 @@ object TabScoreAdapter {
                 var offset = 0.0
                 v.beats.mapIndexedNotNull { bi, b ->
                     val bp = "$mp.voices[$vi].beats[$bi]"
-                    if (b.source["graceNote"] != null) {
-                        warnings += TabWarning(bp, "Grace beat retained in source but omitted from rendering/timing")
-                        return@mapIndexedNotNull null
+                    val grace = when (val value = b.source["graceNote"]?.jsonPrimitive?.contentOrNull) {
+                        null -> null
+                        "onBeat" -> GraceKind.OnBeat
+                        "beforeBeat" -> GraceKind.BeforeBeat
+                        else -> fail("$bp.graceNote", "unrecognised grace placement: $value")
                     }
+                    if (grace == null && b.notes.isEmpty()) preceding.keys.filter { it.first == vi }.forEach { preceding.remove(it) }
                     val bid = "$mid:v$vi:b$bi"
                     locations[bid] = TabSourceLocation(mi, vi, bi)
                     val notes = b.notes.map { n ->
@@ -70,15 +75,19 @@ object TabScoreAdapter {
                             if (kind != null) effects += Effect.Harmonic(kind)
                             else warnings += TabWarning("$np.harmonic", "Unrecognised harmonic retained in source")
                         }
-                        listOf("tie", "staccato", "bend", "slide", "slap").filter { n.source[it] != null && n.source[it] != JsonPrimitive(false) }.forEach {
+                        listOf("staccato", "bend", "slide", "slap").filter { n.source[it] != null && n.source[it] != JsonPrimitive(false) }.forEach {
                             warnings += TabWarning("$np.$it", "Source $it retained; no mapping implemented")
                         }
                         val written = midi + if (options.clef == Clef.Treble8vb) 12 else 0
                         val pc = written % 12
                         val steps = listOf(0, 0, 1, 1, 2, 3, 3, 4, 4, 5, 5, 6)
                         val bottom = if (options.clef == Clef.Bass) 2 * 7 + 4 else 4 * 7 + 2
+                        val source = preceding[vi to n.string]
+                        val tied = n.source.flag("tie", np)
+                        val tieFrom = if (tied && source?.midi == midi && source.fret == n.fret) source.id else null
+                        if (tied && tieFrom == null) warnings += TabWarning("$np.tie", "No preceding same-pitch/string note in this voice")
                         Note(nid, midi, n.string + 1, n.fret, (written / 12 - 1) * 7 + steps[pc] - bottom,
-                            if (pc in listOf(1, 3, 6, 8, 10)) Accidental.Sharp else null, effects)
+                            if (pc in listOf(1, 3, 6, 8, 10)) Accidental.Sharp else null, effects, tieFrom).also { if (grace == null) preceding[vi to n.string] = it }
                     }
                     listOf("text", "chord", "letRing", "tuplet").filter { b.source[it] != null && b.source[it] != JsonPrimitive(false) }.forEach {
                         warnings += TabWarning("$bp.$it", "Source $it retained; annotation not engraved (rational timing preserved)")
@@ -93,7 +102,7 @@ object TabScoreAdapter {
                         else -> null
                     }
                     Beat(bid, duration, b.dotted, notes, offset,
-                        b.durationQuarters / (duration.quarters * if (b.dotted) 1.5 else 1.0), strum).also { offset += b.durationQuarters }
+                        b.durationQuarters / (duration.quarters * if (b.dotted) 1.5 else 1.0), strum, grace, vi).also { if (grace == null) offset += b.durationQuarters }
                 }
             }.sortedBy { it.offsetQuarters }
             Measure(mid, mi + 1, TimeSignature(m.numerator, m.denominator), beats,

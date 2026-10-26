@@ -223,13 +223,48 @@ fun ScoreComposable(
                 // Erase tab line segments first; highlights then remain visible behind fret text.
                 if (style.showTab) beats.forEach { placedBeat -> placedBeat.beat.notes.forEach { note ->
                     val ty = tabY + (note.string - 1) * tabGap
-                    val width = text.measure(tabFretLabel(note), TextStyle(fontSize = (13f / (density * fontScale)).sp)).size.width.toFloat()
+                    val font = if (placedBeat.beat.grace != null) 9f else 13f
+                    val width = text.measure(tabFretLabel(note), TextStyle(fontSize = (font / (density * fontScale)).sp)).size.width.toFloat()
                     drawRect(style.paper, Offset(placedBeat.x - width / 2 - 2, ty - 7), Size(width + 4, 14f))
                 } }
                 measureHighlights(placed, state.selectedNoteIds, state.playback, style).forEach { highlight ->
                     if (onDrawHighlight != null) onDrawHighlight.invoke(this, highlight) else drawScoreHighlight(highlight)
                 }
                 beats.forEachIndexed { index, (beat, bx) ->
+                    if (beat.grace != null) {
+                        // Ornaments have their own small glyphs/stems, never join metrical beams.
+                        fun smallStem(baseY: Float) {
+                            drawLine(style.ink, Offset(bx + 3, baseY), Offset(bx + 3, baseY - 20), .9f)
+                            drawPath(Path().apply { moveTo(bx + 3, baseY - 20); quadraticTo(bx + 12, baseY - 15, bx + 6, baseY - 10) }, style.ink, style = Stroke(.9f))
+                            if (beat.grace == GraceKind.BeforeBeat) drawLine(style.ink, Offset(bx - 1, baseY - 11), Offset(bx + 9, baseY - 18), 1f)
+                        }
+                        if (beat.isRest) {
+                            val glyph = when (beat.duration) {
+                                Duration.Whole -> "\uE4E3"; Duration.Half -> "\uE4E4"; Duration.Quarter -> "\uE4E5"
+                                Duration.Eighth -> "\uE4E6"; Duration.Sixteenth -> "\uE4E7"; Duration.ThirtySecond -> "\uE4E8"
+                            }
+                            if (style.showStaff) music(glyph, bx - 3, y + 2 * gap, 25f)
+                            if (style.showTab) music(glyph, bx - 3, tabY + 2 * tabGap, 25f)
+                        }
+                        beat.notes.forEach { note ->
+                            if (style.showStaff) {
+                                val gy = y + 4 * gap - note.staffStep * gap / 2
+                                if (note.staffStep < 0) for (step in -2 downTo note.staffStep step 2) drawLine(style.ink, Offset(bx - 5, y + 4 * gap - step * gap / 2), Offset(bx + 5, y + 4 * gap - step * gap / 2), .7f)
+                                if (note.staffStep > 8) for (step in 10..note.staffStep step 2) drawLine(style.ink, Offset(bx - 5, y + 4 * gap - step * gap / 2), Offset(bx + 5, y + 4 * gap - step * gap / 2), .7f)
+                                drawOval(style.ink, Offset(bx - 3, gy - 2), Size(6f, 4f))
+                                note.accidental?.let { music(when (it) { Accidental.Sharp -> "\uE262"; Accidental.Flat -> "\uE260"; Accidental.Natural -> "\uE261" }, bx - 11, gy, 25f) }
+                                smallStem(gy)
+                            }
+                            if (style.showTab) {
+                                val gy = tabY + (note.string - 1) * tabGap
+                                val fret = tabFretLabel(note)
+                                val width = text.measure(fret, TextStyle(fontSize = (9f / (density * fontScale)).sp)).size.width.toFloat()
+                                label(fret, bx - width / 2, gy - 6, 9f)
+                                smallStem(gy - 4)
+                            }
+                        }
+                        return@forEachIndexed
+                    }
                     if (beat.isRest) {
                         if (style.showStaff || tabRhythm) {
                             val rest = when (beat.duration) {
@@ -368,6 +403,12 @@ fun ScoreComposable(
                         val lowestY = beat.notes.maxOf { y + 4 * gap - it.staffStep * gap / 2 }
                         drawLine(style.ink, Offset(bx + 4, lowestY), Offset(bx + 4, placed.beamY), 1.2f)
                     }
+                }
+                placed.ties.forEach { tie ->
+                    drawPath(Path().apply {
+                        moveTo(tie.from.x, tie.from.y)
+                        quadraticTo((tie.from.x + tie.to.x) / 2, maxOf(tie.from.y, tie.to.y) + 13f, tie.to.x, tie.to.y)
+                    }, style.ink, style = Stroke(1.2f))
                 }
                 if (style.showStaff || tabRhythm) placed.beams.forEach { beam ->
                     val bare = tabRhythm && style.tabRhythmStyle == TabRhythmStyle.Beams

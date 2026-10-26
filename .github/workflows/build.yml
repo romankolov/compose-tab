@@ -60,6 +60,11 @@ jobs:
       - name: Capture tab articulation exercise
         run: |
           timeout 120s xvfb-run -a -s '-screen 0 1280x900x24' ./gradlew :sample:run --args="--screenshot=$PWD/docs/screenshots/effects.png --view=tab --gp4=$PWD/sample/src/desktopTest/resources/fixtures/effects.gp5"
+      - name: Capture tie and grace engraving
+        run: |
+          for view in both tab; do
+            timeout 120s xvfb-run -a -s '-screen 0 1280x900x24' ./gradlew :sample:run --args="--ornaments --screenshot=$PWD/docs/screenshots/ornaments-$view.png --view=$view"
+          done
       - name: Smoke-test packaged app and archive executable permissions
         run: |
           GP4_ARG=""
