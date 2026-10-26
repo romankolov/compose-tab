@@ -66,6 +66,18 @@ class Gp4PlayerTest {
         listOf(0.0, 1.0, 8.0, 20.0, 40.0, 55.0).forEach { q -> assertEquals(q, clock.quarterAt(clock.millisecondsAt(q)), .0001) }
         assertTrue(clock.millisecondsAt(56.0) > 56 * 600.0, "Encoded tempo change must slow playback")
     }
+    @Test fun javaReaderPreservesTabArticulationsAndStrokeDirections() {
+        val bytes = javaClass.getResourceAsStream("/fixtures/effects.gp5")!!.use { it.readBytes() }
+        val beats = TuxGuitarDecoder.decode(bytes).document.data.tracks.single().measures.first().beats
+        assertTrue(dev.composetab.model.Effect.HammerOn in beats[0].notes.first().effects)
+        assertTrue(dev.composetab.model.Effect.PullOff in beats[1].notes.first().effects)
+        assertTrue(beats[2].notes.first().effects.any { it is dev.composetab.model.Effect.Bend })
+        assertTrue(beats[3].notes.first().effects.any { it is dev.composetab.model.Effect.Harmonic })
+        assertEquals(dev.composetab.model.StrumDirection.Down, beats[4].strum)
+        assertEquals(dev.composetab.model.StrumDirection.Up, beats[5].strum)
+        assertTrue(dev.composetab.model.Effect.Ghost in beats[6].notes.first().effects)
+        assertTrue(beats[7].notes.first().effects.contains(dev.composetab.model.Effect.Harmonic(dev.composetab.model.HarmonicKind.Pinch)))
+    }
     @Test fun malformedGpAndMidiFailWithoutMockScore() {
         listOf(byteArrayOf(), "<html>not GP</html>".encodeToByteArray(), ByteArray(64)).forEach { bytes ->
             assertFails { TuxGuitarDecoder.decode(bytes) }

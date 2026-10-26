@@ -154,11 +154,11 @@ Prerequisites: JDK 17, Android SDK 35 for Android targets; macOS/Xcode for iOS.
 ./gradlew :sample:assembleDebug       # Android APK
 ```
 
-- **Load GP file** opens a Desktop chooser or Android's Storage Access Framework
+- **More → Load GP file** opens a Desktop chooser or Android's Storage Access Framework
   picker. The sample decodes classic **GP1–GP5** (`.gtp`, `.gp3`, `.gp4`, `.gp5`)
   with the actual Java readers from TuxGuitar, off the UI thread. GPX/GP6–8 are
   explicitly rejected. Input is bounded to 16 MiB; errors do not replace the score.
-- **Load requested tab** retrieves the supplied
+- **More → Load requested tab** retrieves the supplied
   [Nothing Else Matters GP4](https://gprotab.net/en/tabs/metallica/nothing-else-matters?download).
   If the host blocks downloads, save the link and use **Load GP file**.
 - The same Java MIDI exporter expands repeats/alternate endings and embedded
@@ -173,9 +173,19 @@ Prerequisites: JDK 17, Android SDK 35 for Android targets; macOS/Xcode for iOS.
   the player and removes cached MIDI. No storage permission is needed. Playback
   is foreground-only, not a background media service. Devices missing a MIDI
   codec show an audio-unavailable message, not a fake playing clock.
-- Choose track, layout, highlight styles and cursor follow in the toolbar.
-  On phones, advanced controls are collapsed under **Options** to leave room for
-  the actual score; the Desktop layout keeps them visible.
+- The score fills the screen, with only playback, scrubber and **More** in a
+  compact bottom bar. **More → Settings** contains track selection, layout,
+  notation/tab, zoom, theme and highlight controls. Song/file details and player
+  diagnostics are there too, rather than occupying the score viewport.
+- Hammer-on/pull-off arcs and bend arrows are anchored to the affected tab fret,
+  not the top of the staff. Ghost frets use `(5)`, harmonics use `<12>` (with
+  artificial/tapped/pinch/semi labels where appropriate), and `Beat.strum` draws
+  an up/down arrow beside the chord. Customize `ScoreStyle.tabStringSpacing`
+  (default 24 logical units) to reserve articulation space independently of staff
+  spacing. The sample preserves these effects from actual TuxGuitar decoding.
+- Playback-follow pans animate the actual viewport over 280 ms, retaining correct
+  culling/hit testing throughout. Dragging/wheeling interrupts follow; re-enable
+  **More → Follow cursor** to resume. The host still owns the playback clock.
   The sample is not a physical guitar synthesizer or full GP articulation editor.
 
 Optional preparation (standard Python downloader only, **no pip dependencies**):
@@ -226,7 +236,8 @@ the playing app. This does not claim physical-device or audible listening tests.
 Screenshots are real captures, not generated mockups:
 [vertical](docs/screenshots/both.png) · [horizontal](docs/screenshots/horizontal.png) ·
 [playing cursor](docs/screenshots/playing.png) · [selection](docs/screenshots/selected.png) ·
-[Android import/playback](docs/screenshots/android-playing.png).
+[Android import/playback](docs/screenshots/android-playing.png) ·
+[tab articulations](docs/screenshots/effects.png).
 
 ## Performance and extension boundaries
 

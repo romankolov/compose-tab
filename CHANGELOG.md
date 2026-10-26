@@ -2,6 +2,12 @@
 
 ## 0.3.0
 
+- Note-local tab hammer/pull/bend visuals, ghost fret parentheses, harmonic fret
+  brackets/types, chord strum arrows, and independent tab string spacing.
+- Animated playback-follow scrolling, cancellable by manual navigation.
+- Score-first sample: full viewport canvas, compact bottom transport, import and
+  track/layout/style/zoom controls moved into More / Settings.
+
 - Generic `ScoreAdapter<T>`, validated `ScoreDocument`, model ID lookup and precise
   `ScoreTimeline` index; asynchronous/uncontrolled state submission API.
 - Multiple playing/selected notes and fractional playhead positions, controlled
