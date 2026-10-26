@@ -98,7 +98,7 @@ internal fun layoutScore(data: ScoreData, style: ScoreStyle, viewportWidth: Floa
         track.id to if (style.showStaff) maxOf(110f, 4 * style.lineSpacing - lowest * style.lineSpacing / 2 + 30f) else 0f
     }
     val rowHeight = max(style.trackSpacing, data.tracks.maxOfOrNull { track ->
-        tabOffsets.getValue(track.id) + track.tuning.size * style.lineSpacing + 80f
+        tabOffsets.getValue(track.id) + track.tuning.size * style.tabStringSpacing + 80f
     } ?: 270f)
     val rows = (0 until systemCount).flatMap { systemIndex -> data.tracks.mapIndexed { trackIndex, track ->
         track.measures.mapIndexedNotNull { index, measure ->
@@ -128,9 +128,9 @@ internal fun layoutScore(data: ScoreData, style: ScoreStyle, viewportWidth: Floa
                             ScoreEvent.NoteSelected(track.id, measure.id, beat.id, note.id, tab))
                     }
                     if (style.showStaff) target(y + 4 * style.lineSpacing - note.staffStep * style.lineSpacing / 2, false)
-                    if (style.showTab) target(y + tabOffset + (note.string - 1) * style.lineSpacing, true)
+                    if (style.showTab) target(y + tabOffset + (note.string - 1) * style.tabStringSpacing, true)
                     if (style.showTab && !style.showStaff && style.showTabRhythm)
-                        target(y + (track.tuning.size - 1) * style.lineSpacing + 50f, true)
+                        target(y + (track.tuning.size - 1) * style.tabStringSpacing + 50f, true)
                 }
                 PlacedBeat(beat, bx, onset)
             }.sortedBy { it.onset }

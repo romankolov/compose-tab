@@ -36,6 +36,8 @@ data class Beat(
     /** Explicit decoder timing supports tuplets and simultaneous voices without rounding. */
     val offsetQuarters: Double? = null,
     val durationScale: Double = 1.0,
+    /** Visual direction on the tab: Down is top string to bottom string. */
+    val strum: StrumDirection? = null,
 
 ) {
     init {
@@ -54,6 +56,9 @@ data class Note(
     val id: String, val midi: Int, val string: Int, val fret: Int,
     val staffStep: Int, val accidental: Accidental? = null, val effects: List<Effect> = emptyList(),
 ) { init { require(midi in 0..127); require(string > 0); require(fret >= 0); require(staffStep in -70..70) } }
+enum class StrumDirection { Up, Down }
+enum class HarmonicKind { Natural, Artificial, Tapped, Pinch, Semi }
+
 sealed interface Effect {
     data class Bend(val semitones: Float = 1f) : Effect {
         init { require(semitones.isFinite() && semitones >= 0f) }
@@ -62,5 +67,7 @@ sealed interface Effect {
     data object HammerOn : Effect
     data object PullOff : Effect
     data object Vibrato : Effect
+    data object Ghost : Effect
+    data class Harmonic(val kind: HarmonicKind = HarmonicKind.Natural) : Effect
     data object PalmMute : Effect
 }

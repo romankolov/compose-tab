@@ -2,6 +2,8 @@ package dev.composetab.ui
 
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.animate
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.focusable
 import androidx.compose.ui.focus.FocusRequester
@@ -65,14 +67,19 @@ fun ScoreComposable(
         val target = if (request != null) noteLocations[request] ?: beatLocations[request]
             else if (state.followPlayback) activeBeat?.let { beatLocations[it] }
                 ?: state.playback?.noteIds?.firstNotNullOfOrNull { noteLocations[it] } else null
-        if (target != null) {
-            if (request != null || target.x < state.scroll + 24 || target.x > state.scroll + width - 48)
-                state.scrollTo(target.x - width * .2f)
-            if (request != null || target.y < state.verticalScroll + 24 || target.y + layout.rowHeight > state.verticalScroll + height)
-                state.scrollVerticallyTo(target.y - 56)
+        val startX = state.scroll
+        val startY = state.verticalScroll
+        val endX = (if (target != null && (request != null || target.x < startX + 24 || target.x > startX + width - 48))
+            target.x - width * .2f else startX).coerceIn(0f, (layout.width - width).coerceAtLeast(0f))
+        val endY = (if (target != null && (request != null || target.y < startY + 24 || target.y + layout.rowHeight > startY + height))
+            target.y - 56 else startY).coerceIn(0f, (layout.height - height).coerceAtLeast(0f))
+        // Animate the actual viewport state, not just its painted transform: hit tests,
+        // culling and host viewport reads stay aligned throughout the transition.
+        // A new beat, explicit reveal, resize or manual gesture cancels this animation.
+        if (endX != startX || endY != startY) animate(0f, 1f, animationSpec = tween(280)) { fraction, _ ->
+            state.scrollTo(startX + (endX - startX) * fraction)
+            state.scrollVerticallyTo(startY + (endY - startY) * fraction)
         }
-        state.scrollTo(state.scroll.coerceAtMost((layout.width - width).coerceAtLeast(0f)))
-        state.scrollVerticallyTo(state.verticalScroll.coerceAtMost((layout.height - height).coerceAtLeast(0f)))
         if (request != null) state.revealRequest = null
     }
     fun viewportEvent() = currentEvent(ScoreEvent.ViewportChanged(state.zoom, state.scroll, state.verticalScroll))
@@ -182,13 +189,14 @@ fun ScoreComposable(
                 val (track, measure, x, y, beats) = placed
                 val gap = style.lineSpacing
                 val tabY = y + placed.tabOffset
+                val tabGap = style.tabStringSpacing
                 val tabRhythm = style.showTab && !style.showStaff && style.showTabRhythm
-                val rhythmY = tabY + (track.tuning.size - 1) * gap + 50f
+                val rhythmY = tabY + (track.tuning.size - 1) * tabGap + 50f
                 label("${measure.number}", x + 8, y - 27, 11f, true)
                 if (placed.startsSystem) label(track.name, x, y - 48, 12f, true)
-                fun lines(top: Float, count: Int) {
-                    repeat(count) { i -> drawLine(style.muted.copy(alpha = .55f), Offset(x, top + i * gap), Offset(x + placed.width, top + i * gap), .7f) }
-                    drawLine(style.ink, Offset(x + placed.width, top), Offset(x + placed.width, top + (count - 1) * gap), 1f)
+                fun lines(top: Float, count: Int, spacing: Float = gap) {
+                    repeat(count) { i -> drawLine(style.muted.copy(alpha = .55f), Offset(x, top + i * spacing), Offset(x + placed.width, top + i * spacing), .7f) }
+                    drawLine(style.ink, Offset(x + placed.width, top), Offset(x + placed.width, top + (count - 1) * spacing), 1f)
                 }
                 if (style.showStaff) {
                     lines(y, 5)
@@ -197,7 +205,7 @@ fun ScoreComposable(
                     label("${measure.time.numerator}", x + 14, y + 1, 17f)
                     label("${measure.time.denominator}", x + 14, y + 20, 17f)
                 }
-                if (style.showTab) { lines(tabY, track.tuning.size); label("TAB", x + 4, tabY + 17, 10f, true) }
+                if (style.showTab) { lines(tabY, track.tuning.size, tabGap); label("TAB", x + 4, tabY + 17, 10f, true) }
                 if (measure.repeatStart || measure.repeatEnd) {
                     val rx = if (measure.repeatStart) x + 3 else x + placed.width - 5
                     val top = if (style.showStaff) y else tabY
@@ -206,8 +214,9 @@ fun ScoreComposable(
                 }
                 // Erase tab line segments first; highlights then remain visible behind fret text.
                 if (style.showTab) beats.forEach { placedBeat -> placedBeat.beat.notes.forEach { note ->
-                    val ty = tabY + (note.string - 1) * gap
-                    drawRect(style.paper, Offset(placedBeat.x - 8, ty - 7), Size(16f, 14f))
+                    val ty = tabY + (note.string - 1) * tabGap
+                    val width = text.measure(tabFretLabel(note), TextStyle(fontSize = (13f / (density * fontScale)).sp)).size.width.toFloat()
+                    drawRect(style.paper, Offset(placedBeat.x - width / 2 - 2, ty - 7), Size(width + 4, 14f))
                 } }
                 measureHighlights(placed, state.selectedNoteIds, state.playback, style).forEach { highlight ->
                     if (onDrawHighlight != null) onDrawHighlight.invoke(this, highlight) else drawScoreHighlight(highlight)
@@ -227,7 +236,7 @@ fun ScoreComposable(
                     }
                     beat.notes.forEach { note ->
                         val ny = y + 4 * gap - note.staffStep * gap / 2
-                        val ty = tabY + (note.string - 1) * gap
+                        val ty = tabY + (note.string - 1) * tabGap
                         if (style.showStaff) {
                             // Ledger lines on every second staff step outside the five-line staff.
                             if (note.staffStep < 0) for (step in -2 downTo note.staffStep step 2) drawLine(style.ink, Offset(bx - 9, y + 4 * gap - step * gap / 2), Offset(bx + 9, y + 4 * gap - step * gap / 2), .8f)
@@ -237,10 +246,12 @@ fun ScoreComposable(
                             if (beat.dotted) drawCircle(style.ink, 1.6f, Offset(bx + 10, ny - 2))
                         }
                         if (style.showTab) {
-                            label(note.fret.toString(), bx - if (note.fret >= 10) 7f else 3.5f, ty - 8, 13f)
+                            val fret = tabFretLabel(note)
+                            val labelWidth = text.measure(fret, TextStyle(fontSize = (13f / (density * fontScale)).sp)).size.width.toFloat()
+                            label(fret, bx - labelWidth / 2, ty - 8, 13f)
                         }
-                        val effectY = if (style.showTab) tabY - 16 else y - 27
-                        val nextOnString = beats.getOrNull(index + 1)?.takeIf { next -> next.beat.notes.any { it.string == note.string } }
+                        val effectY = if (style.showTab) ty - 12 else ny - 12
+                        val nextOnString = beats.drop(index + 1).firstOrNull { next -> next.onset > beats[index].onset && next.beat.notes.any { it.string == note.string } }
                         val effectEnd = nextOnString?.x ?: bx + 31f
                         note.effects.forEach { effect ->
                             when (effect) {
@@ -257,10 +268,31 @@ fun ScoreComposable(
                                     drawPath(arc, style.accent, style = Stroke(1.2f)); label(if (effect == Effect.HammerOn) "H" else "P", (bx + effectEnd) / 2 - 3, effectY - 9, 9f)
                                 }
                                 Effect.Vibrato -> label("~", bx - 3, effectY - 3, 18f)
-                                Effect.PalmMute -> label("P.M.", bx - 8, effectY - 3, 9f)
+                                Effect.PalmMute -> label("P.M.", bx + 8, effectY - 3, 8f)
+                                Effect.Ghost -> Unit // Parentheses are part of the fret label.
+                                is Effect.Harmonic -> {
+                                    if (!style.showTab) {
+                                        val diamond = Path().apply { moveTo(bx, ny - 6); lineTo(bx + 6, ny); lineTo(bx, ny + 6); lineTo(bx - 6, ny); close() }
+                                        drawPath(diamond, style.accent, style = Stroke(1f))
+                                    }
+                                    if (effect.kind != HarmonicKind.Natural) label(when (effect.kind) {
+                                        HarmonicKind.Artificial -> "A.H."; HarmonicKind.Tapped -> "T.H."
+                                        HarmonicKind.Pinch -> "P.H."; HarmonicKind.Semi -> "S.H."; else -> "N.H."
+                                    }, bx + 9, effectY - 1, 8f)
+                                }
                             }
                             onDrawEffect?.invoke(this, effect, Offset(bx, effectY), style)
                         }
+                    }
+                    if (style.showTab && beat.notes.isNotEmpty()) beat.strum?.let { direction ->
+                        val top = tabY + (beat.notes.minOf { it.string } - 1) * tabGap - 5
+                        val bottom = tabY + (beat.notes.maxOf { it.string } - 1) * tabGap + 5
+                        val tip = if (direction == StrumDirection.Down) bottom else top
+                        val tail = if (direction == StrumDirection.Down) top else bottom
+                        val head = if (direction == StrumDirection.Down) -5f else 5f
+                        drawLine(style.accent, Offset(bx - 17, tail), Offset(bx - 17, tip), 1.4f)
+                        drawLine(style.accent, Offset(bx - 21, tip + head), Offset(bx - 17, tip), 1.4f)
+                        drawLine(style.accent, Offset(bx - 13, tip + head), Offset(bx - 17, tip), 1.4f)
                     }
                     if (tabRhythm && beat.notes.isNotEmpty()) {
                         drawOval(style.ink, Offset(bx - 4, rhythmY - 3), Size(8f, 6f),

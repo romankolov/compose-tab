@@ -1,9 +1,8 @@
 package dev.composetab.sample
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -22,10 +21,11 @@ import kotlin.math.abs
 private val Green = Color(0xFF347B60)
 private val Ink = Color(0xFF26352F)
 
-@OptIn(ExperimentalResourceApi::class, ExperimentalLayoutApi::class)
+/** The score owns the screen. Import, track selection and customization live in More. */
+@OptIn(ExperimentalResourceApi::class)
 @Composable
 fun App(initialView: String = "both", services: SampleServices? = null, onLoaded: (Result<Unit>) -> Unit = {}) {
-    MaterialTheme(colorScheme = lightColorScheme(primary = Green, secondary = Green, primaryContainer = Color(0xFFE3ECE3), secondaryContainer = Color(0xFFE3ECE3), onSecondaryContainer = Ink, background = Color(0xFFF3F4EF), surface = Color(0xFFFFFEFA), onSurface = Ink)) {
+    MaterialTheme(colorScheme = lightColorScheme(primary = Green, secondary = Green, background = Color(0xFFFFFEFA), surface = Color(0xFFFFFEFA), onSurface = Ink)) {
         var song by remember { mutableStateOf<SampleSong?>(null) }
         var error by remember { mutableStateOf<String?>(null) }
         var busy by remember { mutableStateOf(true) }
@@ -38,7 +38,7 @@ fun App(initialView: String = "both", services: SampleServices? = null, onLoaded
         }
         LaunchedEffect(services) {
             try {
-                install(services?.initialSong() ?: Gp4DocumentAdapter.parse(Res.readBytes("files/original-study.json").decodeToString(), "Predecoded original GP4 study"))
+                install(services?.initialSong() ?: Gp4DocumentAdapter.parse(Res.readBytes("files/original-study.json").decodeToString(), "Predecoded original study"))
                 currentLoaded(Result.success(Unit))
             } catch (failure: Exception) {
                 if (failure is kotlinx.coroutines.CancellationException) throw failure
@@ -46,159 +46,159 @@ fun App(initialView: String = "both", services: SampleServices? = null, onLoaded
                 currentLoaded(Result.failure(failure))
             } finally { busy = false }
         }
-        Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-            BoxWithConstraints(Modifier.fillMaxSize()) {
-                val compact = maxWidth < 600.dp
-                Column(Modifier.fillMaxSize().padding(if (compact) 12.dp else 20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Column(if (compact) Modifier.fillMaxWidth() else Modifier) {
-                            Text("COMPOSE / TAB", color = Green, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
-                            if (!compact) Text("Decoder in. Your player in control.", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
-                        }
-                        if (services != null) FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            OutlinedButton(enabled = !busy, onClick = { scope.launch {
-                                busy = true; error = null
-                                try { services.importGp()?.let { install(it) } }
-                                catch (e: Exception) { if (e is kotlinx.coroutines.CancellationException) throw e; error = e.message }
-                                finally { busy = false }
-                            } }) { Text("Load GP file") }
-                            Button(enabled = !busy, onClick = { scope.launch {
-                                busy = true; error = null
-                                try { install(services.requestedSong()) }
-                                catch (e: Exception) { if (e is kotlinx.coroutines.CancellationException) throw e; error = e.message }
-                                finally { busy = false }
-                            } }) { Text("Load requested tab") }
-                        }
-                    }
-                    if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())
-                    error?.let { message ->
-                        Surface(color = MaterialTheme.colorScheme.errorContainer, shape = RoundedCornerShape(12.dp)) {
-                            Text(message, Modifier.padding(12.dp), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onErrorContainer)
-                        }
-                    }
-                    val loaded = song
-                    if (loaded != null) ScoreScreen(loaded, initialView, services, Modifier.weight(1f), compact)
-                    else if (!busy) Text("Load a Guitar Pro 1–5 file to begin. No Python installation is needed.")
+        fun load(requested: Boolean) {
+            if (services == null || busy) return
+            scope.launch {
+                busy = true; error = null
+                try {
+                    val value = if (requested) services.requestedSong() else services.importGp()
+                    value?.let { install(it) }
+                } catch (failure: Exception) {
+                    if (failure is kotlinx.coroutines.CancellationException) throw failure
+                    error = failure.message ?: "Could not open file"
+                } finally { busy = false }
+            }
+        }
+        Surface(Modifier.fillMaxSize()) {
+            Box(Modifier.fillMaxSize()) {
+                Studio(song, initialView, services, busy, onImport = { load(false) }, onDownload = { load(true) })
+                if (busy) LinearProgressIndicator(Modifier.fillMaxWidth().align(Alignment.TopCenter))
+                error?.let { message ->
+                    Snackbar(Modifier.align(Alignment.TopCenter).padding(12.dp), action = {
+                        TextButton(onClick = { error = null }) { Text("Dismiss") }
+                    }) { Text(message) }
                 }
             }
         }
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
-private fun ScoreScreen(song: SampleSong, initialView: String, services: SampleServices?, modifier: Modifier, compact: Boolean) {
-    val source = song.document.data
-    var trackId by remember(song) { mutableStateOf(source.tracks.first().id) }
-    val track = source.tracks.first { it.id == trackId }
-    val document = remember(song, trackId) { ScoreDocument(source.copy(tracks = listOf(track)),
-        ScoreTimeline(song.document.timeline.moments.filter { it.trackId == trackId })) }
+private fun Studio(song: SampleSong?, initialView: String, services: SampleServices?, busy: Boolean, onImport: () -> Unit, onDownload: () -> Unit) {
+    val source = song?.document?.data ?: ScoreData("Open a Guitar Pro file", tracks = emptyList())
+    var trackId by remember(song) { mutableStateOf(source.tracks.firstOrNull()?.id) }
+    val track = source.tracks.firstOrNull { it.id == trackId }
+    val document = remember(song, trackId) {
+        if (song != null && track != null) ScoreDocument(source.copy(tracks = listOf(track)),
+            ScoreTimeline(song.document.timeline.moments.filter { it.trackId == trackId })) else ScoreDocument(source)
+    }
     val state = rememberScoreState(document)
     val transport = services?.transport
-    val status = if (transport != null) transport.status.collectAsState().value else TransportStatus()
+    val status = transport?.status?.collectAsState()?.value ?: TransportStatus()
     var staff by remember { mutableStateOf(initialView != "tab") }
     var tab by remember { mutableStateOf(true) }
-    var darkPaper by remember { mutableStateOf(false) }
+    var dark by remember { mutableStateOf(false) }
     var mode by remember { mutableStateOf(if (initialView == "horizontal") ScoreLayoutMode.Horizontal else ScoreLayoutMode.Vertical) }
     var selectionShape by remember { mutableStateOf(HighlightShape.NoteHead) }
     var playingShape by remember { mutableStateOf(HighlightShape.NoteHead) }
     var cursorShape by remember { mutableStateOf(HighlightShape.VerticalLine) }
-    var menu by remember { mutableStateOf(false) }
-    var showOptions by remember { mutableStateOf(false) }
+    var more by remember { mutableStateOf(false) }
+    var settings by remember { mutableStateOf(false) }
+    var scrub by remember(song) { mutableStateOf<Float?>(null) }
+    val clock = remember(song) { song?.let { runCatching { MidiTempoMap.parse(it.midi) }.getOrNull() } }
+    fun time(quarter: Double): String {
+        val seconds = ((clock?.millisecondsAt(quarter) ?: 0.0) / 1000).toInt().coerceAtLeast(0)
+        return "${seconds / 60}:${(seconds % 60).toString().padStart(2, '0')}"
+    }
     LaunchedEffect(status.quarter, status.playing, document) {
         if (status.playing || status.quarter > 0) state.setPlaybackQuarter(status.quarter) else state.clearPlayback()
     }
     LaunchedEffect(initialView, document) {
-        if (initialView == "selected") {
-            val note = track.measures.flatMap { it.beats }.flatMap { it.notes }.getOrNull(2)
-            state.selectedNoteId = note?.id
+        if (initialView == "selected") state.selectedNoteId = track?.measures?.flatMap { it.beats }?.flatMap { it.notes }?.getOrNull(2)?.id
+    }
+    Column(Modifier.fillMaxSize()) {
+        Box(Modifier.weight(1f).fillMaxWidth()) {
+            if (song != null) ScoreComposable(state, Modifier.fillMaxSize(), ScoreStyle(
+                showStaff = staff, showTab = tab, layoutMode = mode,
+                paper = if (dark) Color(0xFF202C29) else Color(0xFFFFFEFA),
+                ink = if (dark) Color(0xFFE9F0E6) else Ink,
+                muted = if (dark) Color(0xFF9CAEA1) else Color(0xFF89938B),
+                accent = if (dark) Color(0xFF8AD5AB) else Green,
+                selectedHighlight = ScoreHighlightStyle(selectionShape, Color(0x664BA577)),
+                playingHighlight = ScoreHighlightStyle(playingShape, Color(0x663E9DD0)),
+                playhead = ScoreHighlightStyle(cursorShape, Color(0xFF2D8FBF), 2f),
+            ), onEvent = { event ->
+                if (event is ScoreEvent.NoteSelected) document.timeline.moments.filter { it.beatId == event.beatId }
+                    .minByOrNull { abs(it.startQuarter - status.quarter) }?.let { transport?.seek(it.startQuarter) }
+            }) else Text(if (busy) "Opening score…" else "Use More to open a Guitar Pro file", Modifier.align(Alignment.Center))
+        }
+        Surface(shadowElevation = 8.dp, tonalElevation = 2.dp) {
+            Column(Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 12.dp, vertical = 4.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Column(Modifier.weight(1f)) {
+                        Text(source.title, maxLines = 1, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.titleSmall)
+                        Text(track?.name ?: "Compose Tab", maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.labelSmall, color = Green)
+                    }
+                    if (transport != null) {
+                        Button(enabled = song != null && !busy, onClick = { if (status.playing) transport.pause() else transport.play() }) { Text(if (status.playing) "Pause" else "Play") }
+                        TextButton(enabled = song != null, onClick = transport::stop) { Text("Stop") }
+                    }
+                    Box {
+                        TextButton(onClick = { more = true }) { Text("More") }
+                        DropdownMenu(more, { more = false }) {
+                            if (services != null) {
+                                DropdownMenuItem(text = { Text("Load GP file") }, enabled = !busy, onClick = { more = false; onImport() })
+                                DropdownMenuItem(text = { Text("Load requested tab") }, enabled = !busy, onClick = { more = false; onDownload() })
+                                HorizontalDivider()
+                            }
+                            DropdownMenuItem(text = { Text("Settings") }, onClick = { more = false; settings = true })
+                            DropdownMenuItem(text = { Text(if (state.followPlayback) "Disable follow cursor" else "Follow cursor") }, onClick = { more = false; state.followPlayback = !state.followPlayback })
+                        }
+                    }
+                }
+                if (transport != null && song != null) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(time((scrub?.toDouble() ?: status.quarter)), style = MaterialTheme.typography.labelSmall)
+                    Slider(value = (scrub ?: status.quarter.toFloat()).coerceIn(0f, status.durationQuarters.toFloat().coerceAtLeast(1f)),
+                        onValueChange = { scrub = it }, onValueChangeFinished = { scrub?.let { transport.seek(it.toDouble()) }; scrub = null },
+                        valueRange = 0f..status.durationQuarters.toFloat().coerceAtLeast(1f), modifier = Modifier.weight(1f))
+                    Text(time(status.durationQuarters), style = MaterialTheme.typography.labelSmall)
+                }
+            }
         }
     }
-    Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text(source.title, style = if (compact) MaterialTheme.typography.titleLarge else MaterialTheme.typography.headlineMedium,
-                    fontWeight = FontWeight.SemiBold, maxLines = if (compact) 2 else 4, overflow = TextOverflow.Ellipsis)
-                Text("${source.composer}  ·  ${track.measures.size} measures", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+    if (settings) ModalBottomSheet(onDismissRequest = { settings = false }) {
+        Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text("Score settings", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
+                TextButton(onClick = { settings = false }) { Text("Done") }
             }
-            Box(Modifier.widthIn(max = if (compact) 145.dp else 320.dp)) {
-                OutlinedButton(onClick = { menu = true }) { Text(track.name, maxLines = 2, overflow = TextOverflow.Ellipsis) }
-                DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-                    source.tracks.forEach { item -> DropdownMenuItem(text = { Text(item.name) }, onClick = { trackId = item.id; menu = false }) }
-                }
+            Text("Track", style = MaterialTheme.typography.labelLarge)
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) { source.tracks.forEach { item ->
+                FilterChip(selected = trackId == item.id, onClick = { trackId = item.id }, label = { Text(item.name) })
+            } }
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilterChip(mode == ScoreLayoutMode.Vertical, { mode = ScoreLayoutMode.Vertical; state.scrollTo(0f); state.scrollVerticallyTo(0f) }, label = { Text("Vertical · wrap") })
+                FilterChip(mode == ScoreLayoutMode.Horizontal, { mode = ScoreLayoutMode.Horizontal; state.scrollTo(0f); state.scrollVerticallyTo(0f) }, label = { Text("Horizontal") })
+                FilterChip(staff, { if (tab) staff = !staff }, label = { Text("Notation") })
+                FilterChip(tab, { if (staff) tab = !tab }, label = { Text("Tab") })
+                FilterChip(dark, { dark = !dark }, label = { Text("Night") })
+                FilterChip(state.followPlayback, { state.followPlayback = !state.followPlayback }, label = { Text("Follow cursor") })
             }
+            Text("Zoom · ${(state.zoom * 100).toInt()}%", style = MaterialTheme.typography.labelLarge)
+            Slider(state.zoom, state::zoomTo, valueRange = .5f..2.5f)
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                ShapePicker("Selection", selectionShape) { selectionShape = it }
+                ShapePicker("Playing", playingShape) { playingShape = it }
+                ShapePicker("Cursor", cursorShape) { cursorShape = it }
+            }
+            TextButton(onClick = { state.zoomTo(1f); state.scrollTo(0f); state.scrollVerticallyTo(0f) }) { Text("Reset viewport") }
+            HorizontalDivider()
+            Text(source.composer, style = MaterialTheme.typography.bodySmall)
+            Text(song?.source.orEmpty(), style = MaterialTheme.typography.bodySmall)
+            Text(if (transport != null) status.message else "UI-only preview on this platform", style = MaterialTheme.typography.bodySmall)
+            song?.warnings?.forEach { Text(it, style = MaterialTheme.typography.bodySmall) }
         }
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            FilterChip(selected = mode == ScoreLayoutMode.Vertical, onClick = { mode = ScoreLayoutMode.Vertical; state.scrollTo(0f); state.scrollVerticallyTo(0f) }, label = { Text("Vertical · wrap") })
-            FilterChip(selected = mode == ScoreLayoutMode.Horizontal, onClick = { mode = ScoreLayoutMode.Horizontal; state.scrollTo(0f); state.scrollVerticallyTo(0f) }, label = { Text("Horizontal") })
-            if (compact) FilterChip(selected = showOptions, onClick = { showOptions = !showOptions }, label = { Text("Options") })
-            if (!compact || showOptions) {
-                FilterChip(selected = staff, onClick = { if (tab) staff = !staff }, label = { Text("Notation") })
-                FilterChip(selected = tab, onClick = { if (staff) tab = !tab }, label = { Text("Tab") })
-                FilterChip(selected = darkPaper, onClick = { darkPaper = !darkPaper }, label = { Text("Night") })
-                FilterChip(selected = state.followPlayback, onClick = { state.followPlayback = !state.followPlayback }, label = { Text("Follow cursor") })
-            }
-        }
-        Surface(Modifier.weight(1f).fillMaxWidth(), shape = RoundedCornerShape(18.dp), shadowElevation = 2.dp) {
-            Column {
-                if (!compact || showOptions) {
-                    FlowRow(Modifier.padding(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        ShapePicker("Selection", selectionShape, listOf(HighlightShape.NoteHead, HighlightShape.Rectangle, HighlightShape.VerticalLine, HighlightShape.BeatColumn, HighlightShape.None)) { selectionShape = it }
-                        ShapePicker("Playing", playingShape, listOf(HighlightShape.NoteHead, HighlightShape.Rectangle, HighlightShape.VerticalLine, HighlightShape.BeatColumn, HighlightShape.None)) { playingShape = it }
-                        ShapePicker("Cursor", cursorShape, listOf(HighlightShape.VerticalLine, HighlightShape.BeatColumn, HighlightShape.None)) { cursorShape = it }
-                    }
-                    HorizontalDivider(color = Color(0xFFE9ECE5))
-                }
-                ScoreComposable(state, Modifier.fillMaxWidth().weight(1f), ScoreStyle(
-                    showStaff = staff, showTab = tab, layoutMode = mode,
-                    paper = if (darkPaper) Color(0xFF202C29) else Color(0xFFFFFEFA),
-                    ink = if (darkPaper) Color(0xFFE9F0E6) else Ink,
-                    muted = if (darkPaper) Color(0xFF9CAEA1) else Color(0xFF89938B),
-                    accent = if (darkPaper) Color(0xFF8AD5AB) else Green,
-                    selectedHighlight = ScoreHighlightStyle(selectionShape, Color(0x664BA577)),
-                    playingHighlight = ScoreHighlightStyle(playingShape, Color(0x663E9DD0)),
-                    playhead = ScoreHighlightStyle(cursorShape, Color(0xFF2D8FBF), 2f),
-                ), onEvent = { event ->
-                    if (event is ScoreEvent.NoteSelected) {
-                        val moment = document.timeline.moments.filter { it.beatId == event.beatId }.minByOrNull { abs(it.startQuarter - status.quarter) }
-                        moment?.let { transport?.seek(it.startQuarter) }
-                    }
-                })
-                HorizontalDivider(color = Color(0xFFE9ECE5))
-                Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text("Zoom", style = MaterialTheme.typography.labelSmall)
-                    Slider(state.zoom, state::zoomTo, valueRange = .5f..2.5f, modifier = Modifier.weight(1f, fill = false).widthIn(max = 200.dp).padding(horizontal = 12.dp))
-                    Text("${(state.zoom * 100).toInt()}%", style = MaterialTheme.typography.labelMedium)
-                    TextButton(onClick = { state.zoomTo(1f); state.scrollTo(0f); state.scrollVerticallyTo(0f) }) { Text("Reset") }
-                }
-            }
-        }
-        if (transport != null) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(onClick = { if (status.playing) transport.pause() else transport.play() }) { Text(if (status.playing) "Pause" else "Play") }
-                OutlinedButton(onClick = transport::stop) { Text("Stop") }
-                Slider(status.quarter.toFloat().coerceIn(0f, status.durationQuarters.toFloat().coerceAtLeast(1f)), { transport.seek(it.toDouble()) },
-                    valueRange = 0f..status.durationQuarters.toFloat().coerceAtLeast(1f), modifier = Modifier.weight(1f))
-                Text("${status.quarter.toInt()} / ${status.durationQuarters.toInt()} q", style = MaterialTheme.typography.labelSmall)
-            }
-            Text(status.message, style = MaterialTheme.typography.bodySmall, color = if (status.audioAvailable) Green else Color.Gray)
-        } else Text("Android and Desktop provide GP1–GP5 import and General MIDI playback. This platform shows the predecoded original study.", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
-        AnimatedVisibility(state.selectedNoteId != null) {
-            val note = track.measures.flatMap { it.beats }.flatMap { it.notes }.firstOrNull { it.id == state.selectedNoteId }
-            Text(note?.let { "Selected · MIDI ${it.midi} · String ${it.string} · Fret ${it.fret}" }.orEmpty(),
-                Modifier.fillMaxWidth().background(Color(0xFFE3ECE3), RoundedCornerShape(10.dp)).padding(10.dp), color = Green)
-        }
-        Text("${song.source}  ·  ${song.warnings.firstOrNull().orEmpty()}", style = MaterialTheme.typography.labelSmall, color = Color.Gray, maxLines = 2)
     }
 }
 
 @Composable
-private fun ShapePicker(label: String, selected: HighlightShape, choices: List<HighlightShape>, onChange: (HighlightShape) -> Unit) {
+private fun ShapePicker(label: String, selected: HighlightShape, onChange: (HighlightShape) -> Unit) {
     var open by remember { mutableStateOf(false) }
     Box {
-        TextButton(onClick = { open = true }) { Text("$label: ${selected.name}", style = MaterialTheme.typography.labelSmall) }
+        OutlinedButton(onClick = { open = true }) { Text("$label: ${selected.name}", style = MaterialTheme.typography.labelSmall) }
         DropdownMenu(open, { open = false }) {
-            choices.forEach { shape -> DropdownMenuItem(text = { Text(shape.name) }, onClick = { onChange(shape); open = false }) }
+            HighlightShape.entries.forEach { shape -> DropdownMenuItem(text = { Text(shape.name) }, onClick = { onChange(shape); open = false }) }
         }
     }
 }

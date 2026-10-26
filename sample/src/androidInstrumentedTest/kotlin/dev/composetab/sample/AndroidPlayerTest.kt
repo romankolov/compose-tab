@@ -47,6 +47,8 @@ class AndroidPlayerTest {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val device = UiDevice.getInstance(instrumentation)
         ActivityScenario.launch(MainActivity::class.java).use {
+            val more = device.findObject(UiSelector().text("More"))
+            assertTrue(more.waitForExists(15_000)); more.click()
             val load = device.findObject(UiSelector().text("Load GP file"))
             assertTrue("Load button must be accessible", load.waitForExists(15_000))
             // Initial decode prepares the native player before enabling Load.
@@ -61,15 +63,24 @@ class AndroidPlayerTest {
             val file = device.findObject(UiSelector().textContains("original-study"))
             assertTrue("CI fixture must be visible in SAF", file.waitForExists(5_000))
             file.click()
+            assertTrue(device.findObject(UiSelector().text("Play")).waitForExists(15_000))
+            val readyDeadline = System.currentTimeMillis() + 15_000
+            while (!device.findObject(UiSelector().text("Play")).isEnabled && System.currentTimeMillis() < readyDeadline) Thread.sleep(100)
+            more.click()
+            device.findObject(UiSelector().text("Settings")).click()
             val source = device.findObject(UiSelector().textContains("original-study.gp4"))
-            assertTrue("Imported file must replace the bundled source", source.waitForExists(15_000))
+            // Settings is scrollable; the imported source is in its details section.
+            val scroll = androidx.test.uiautomator.UiScrollable(UiSelector().scrollable(true))
+            if (!source.exists()) scroll.scrollTextIntoView("original-study.gp4")
+            assertTrue("Imported file must replace the bundled source", source.waitForExists(5_000))
+            device.pressBack()
             val play = device.findObject(UiSelector().text("Play"))
             assertTrue(play.waitForExists(10_000)); play.click()
             assertTrue(device.findObject(UiSelector().text("Pause")).waitForExists(5_000))
             Thread.sleep(1200)
             val score = device.findObject(UiSelector().descriptionContains("music score"))
             assertTrue("Score canvas must remain visible on a phone", score.exists())
-            assertTrue("Advanced controls must not squeeze the score out", score.bounds.height() >= device.displayHeight / 5)
+            assertTrue("Advanced controls must not squeeze the score out", score.bounds.height() >= device.displayHeight * 2 / 3)
             // Gradle uninstalls the APK after connected tests, deleting app-owned
             // external files. Capture as shell into Downloads so CI can collect it.
             val capture = instrumentation.uiAutomation.executeShellCommand("screencap -p /sdcard/Download/compose-tab-android-playing.png")

@@ -109,6 +109,8 @@ data class ScoreStyle(
     val selectedHighlight: ScoreHighlightStyle = ScoreHighlightStyle(color = selection),
     val playingHighlight: ScoreHighlightStyle = ScoreHighlightStyle(color = Color(0x6675B4D7)),
     val playhead: ScoreHighlightStyle = ScoreHighlightStyle(HighlightShape.VerticalLine, Color(0xFF2482B0)),
+    /** Room for note-local tab articulation arcs, labels and bend arrows. */
+    val tabStringSpacing: Float = 24f,
 ) {
-    init { require(measureWidth.isFinite() && measureWidth >= 140f); require(lineSpacing.isFinite() && lineSpacing >= 6f); require(trackSpacing.isFinite() && trackSpacing >= 220f) }
+    init { require(tabStringSpacing.isFinite() && tabStringSpacing >= 10f); require(measureWidth.isFinite() && measureWidth >= 140f); require(lineSpacing.isFinite() && lineSpacing >= 6f); require(trackSpacing.isFinite() && trackSpacing >= 220f) }
 }

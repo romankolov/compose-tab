@@ -68,13 +68,25 @@ object TuxGuitarDecoder : ScoreAdapter<ByteArray> {
                                         buildList {
                                             val e = n.effect
                                             if (e.isBend) add(Effect.Bend((e.bend.points.maxOfOrNull { it.value } ?: 0).toFloat()))
-                                            if (e.isHammer) add(Effect.HammerOn)
+                                            if (e.isGhostNote) add(Effect.Ghost)
+                                            if (e.isHarmonic) add(Effect.Harmonic(when (e.harmonic.type) {
+                                                2 -> HarmonicKind.Artificial; 3 -> HarmonicKind.Tapped
+                                                4 -> HarmonicKind.Pinch; 5 -> HarmonicKind.Semi; else -> HarmonicKind.Natural
+                                            }))
+                                            if (e.isHammer) {
+                                                val next = (m.beats.drop(bi + 1) + (if (mi + 1 < t.countMeasures()) t.getMeasure(mi + 1).beats else emptyList()))
+                                                    .firstNotNullOfOrNull { it.getVoice(vi).notes.firstOrNull { next -> next.string == n.string } }
+                                                add(if (next != null && next.value < n.value) Effect.PullOff else Effect.HammerOn)
+                                            }
                                             if (e.isSlide) add(Effect.Slide)
                                             if (e.isVibrato) add(Effect.Vibrato)
                                             if (e.isPalmMute) add(Effect.PalmMute)
                                         })
                                 }, offsetQuarters = (b.start - m.start).toDouble() / TGDuration.QUARTER_TIME,
-                                    durationScale = (d.time.toDouble() / TGDuration.QUARTER_TIME) / (duration.quarters * if (d.isDotted) 1.5 else 1.0))
+                                    durationScale = (d.time.toDouble() / TGDuration.QUARTER_TIME) / (duration.quarters * if (d.isDotted) 1.5 else 1.0),
+                                    strum = when (b.stroke.direction) {
+                                        1 -> StrumDirection.Up; -1 -> StrumDirection.Down; else -> null
+                                    })
                             }
                         }, repeatStart = m.header.isRepeatOpen, repeatEnd = m.header.repeatClose > 0,
                         lengthQuarters = m.length.toDouble() / TGDuration.QUARTER_TIME)
