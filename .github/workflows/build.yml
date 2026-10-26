@@ -1,0 +1,178 @@
+name: Build, test and capture
+on:
+  push:
+    branches: [main, 'arena/**']
+  workflow_dispatch:
+permissions:
+  contents: write
+  pull-requests: write
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  desktop-android:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    env:
+      COMPOSE_TAB_SILENT: '1'
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Fetch requested GP4 (no Python decoder/runtime dependencies)
+        run: |
+          if ! python3 sample/tools/prepare_gp4.py --fetch; then
+            echo '::warning::External tab host unavailable; screenshots will show the clearly titled original study.'
+          fi
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Test libraries and assemble Android and Desktop
+        run: |
+          set -o pipefail
+          xvfb-run -a ./gradlew :score-model:desktopTest :score-ui:desktopTest :sample:desktopTest :sample:assembleDebug :sample:desktopJar :sample:createDistributable --console=plain 2>&1 | tee -a build-log.txt
+      - name: Capture real desktop windows
+        run: |
+          mkdir -p docs/screenshots
+          GP4_ARG=""
+          if [ -f "$PWD/sample/local/nothing-else-matters.gp4" ]; then GP4_ARG="--gp4=$PWD/sample/local/nothing-else-matters.gp4"; fi
+          for view in both tab selected horizontal playing; do
+            timeout 120s xvfb-run -a -s '-screen 0 1280x900x24' ./gradlew :sample:run --args="--screenshot=$PWD/docs/screenshots/$view.png --view=$view $GP4_ARG"
+          done
+      - name: Capture tab articulation exercise
+        run: |
+          timeout 120s xvfb-run -a -s '-screen 0 1280x900x24' ./gradlew :sample:run --args="--screenshot=$PWD/docs/screenshots/effects.png --view=tab --gp4=$PWD/sample/src/desktopTest/resources/fixtures/effects.gp5"
+      - name: Smoke-test packaged app and archive executable permissions
+        run: |
+          GP4_ARG=""
+          if [ -f "$PWD/sample/local/nothing-else-matters.gp4" ]; then GP4_ARG="--gp4=$PWD/sample/local/nothing-else-matters.gp4"; fi
+          timeout 120s xvfb-run -a -s '-screen 0 1280x900x24' sample/build/compose/binaries/main/app/ComposeTabStudio/bin/ComposeTabStudio --screenshot="$RUNNER_TEMP/packaged.png" --view=both $GP4_ARG
+          test -s "$RUNNER_TEMP/packaged.png"
+          tar -czf ComposeTabStudio-linux-x64.tar.gz -C sample/build/compose/binaries/main/app ComposeTabStudio
+      - name: Archive corresponding sample source and licenses
+        run: git archive --format=tar.gz -o ComposeTabStudio-source.tar.gz HEAD
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sample-corresponding-source
+          path: ComposeTabStudio-source.tar.gz
+      - name: Attach captures to this branch
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/heads/arena/')
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add docs/screenshots/*.png
+          git diff --cached --quiet || git commit -m "docs: attach CI desktop screenshots [skip ci]"
+          for attempt in 1 2 3; do
+            git pull --rebase origin "${{ github.ref_name }}"
+            if git push origin HEAD:${{ github.ref_name }}; then exit 0; fi
+          done
+          exit 1
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: desktop-screenshots
+          path: docs/screenshots/*.png
+          if-no-files-found: warn
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-desktop-app
+          path: ComposeTabStudio-linux-x64.tar.gz
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android-debug
+          path: sample/build/outputs/apk/debug/*.apk
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-reports
+          path: '**/build/reports/tests/'
+      - name: Report build failure on PR
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          { echo '### CI diagnostics: Desktop / Android'; echo '```text'; head -120 build-log.txt; tail -60 build-log.txt; echo '```'; } > diagnostic.md
+          PR=$(gh pr list --head "${{ github.ref_name }}" --state open --json number --jq '.[0].number // empty')
+          if [ -n "$PR" ]; then gh pr comment "$PR" --body-file diagnostic.md; fi
+  android-device:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Enable emulator acceleration
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Run native MIDI playback and SAF import on Android
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 29
+          arch: x86_64
+          profile: pixel_2
+          disable-animations: true
+          script: |
+            adb shell mkdir -p /sdcard/Download
+            adb push sample/src/commonMain/composeResources/files/original-study.gp4 /sdcard/Download/original-study.gp4
+            bash -o pipefail -c './gradlew :sample:connectedDebugAndroidTest --console=plain 2>&1 | tee android-build-log.txt'
+            mkdir -p docs/screenshots
+            adb pull /sdcard/Download/compose-tab-android-playing.png docs/screenshots/android-playing.png
+      - name: Attach Android emulator capture to this branch
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/heads/arena/')
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add docs/screenshots/android-playing.png
+          git diff --cached --quiet || git commit -m "docs: attach Android emulator playback screenshot [skip ci]"
+          for attempt in 1 2 3; do
+            git pull --rebase origin "${{ github.ref_name }}"
+            if git push origin HEAD:${{ github.ref_name }}; then exit 0; fi
+          done
+          exit 1
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: android-device-verification
+          path: |
+            android-build-log.txt
+            sample/build/reports/androidTests/
+            sample/build/outputs/androidTest-results/
+            docs/screenshots/android-playing.png
+      - name: Report Android device-test failure on PR
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          PR=$(gh pr list --head "${{ github.ref_name }}" --state open --json number --jq '.[0].number // empty')
+          { echo '### Android emulator validation'; echo 'https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}'; echo '```text'; tail -90 android-build-log.txt || true; echo '```'; } > android-diagnostic.md
+          if [ -n "$PR" ]; then gh pr comment "$PR" --body-file android-diagnostic.md; fi
+  ios:
+    runs-on: macos-14
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+      - run: |
+          set -o pipefail
+          ./gradlew :sample:linkDebugFrameworkIosSimulatorArm64 --console=plain 2>&1 | tee -a build-log.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ios-simulator-framework
+          path: sample/build/bin/iosSimulatorArm64/debugFramework/
+      - name: Report build failure on PR
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          { echo '### CI diagnostics: iOS'; echo '```text'; head -120 build-log.txt; tail -60 build-log.txt; echo '```'; } > diagnostic.md
+          PR=$(gh pr list --head "${{ github.ref_name }}" --state open --json number --jq '.[0].number // empty')
+          if [ -n "$PR" ]; then gh pr comment "$PR" --body-file diagnostic.md; fi
