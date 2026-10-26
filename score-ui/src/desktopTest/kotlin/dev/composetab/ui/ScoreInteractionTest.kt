@@ -65,7 +65,7 @@ class ScoreInteractionTest {
         val marks = mutableListOf<HighlightKind>()
         val target = layoutScore(wrapped, style, 650f).targets.first { it.event.noteId == "n2" && !it.event.tablature }.bounds.center
         compose.setContent {
-            ScoreComposable(state, Modifier.size(650.dp, 400.dp).testTag("wrapped"), style, events::add,
+            ScoreComposable(state, Modifier.size(650.dp, 520.dp).testTag("wrapped"), style, events::add,
                 onDrawHighlight = { marks += it.kind; drawScoreHighlight(it) })
         }
         compose.onNodeWithTag("wrapped").performTouchInput { click(Offset(target.x.dp.toPx(), target.y.dp.toPx())) }

@@ -264,7 +264,7 @@ fun ScoreComposable(
                                     drawLine(style.accent, Offset(bx + 10, slideY + 5), Offset(effectEnd - 9, slideY - 5), 1.3f)
                                 }
                                 Effect.HammerOn, Effect.PullOff -> {
-                                    val arc = Path().apply { moveTo(bx, effectY + 8); quadraticTo((bx + effectEnd) / 2, effectY - 8, effectEnd, effectY + 8) }
+                                    val arc = Path().apply { moveTo(bx + 8, effectY + 8); quadraticTo((bx + effectEnd) / 2, effectY - 8, effectEnd - 8, effectY + 8) }
                                     drawPath(arc, style.accent, style = Stroke(1.2f)); label(if (effect == Effect.HammerOn) "H" else "P", (bx + effectEnd) / 2 - 3, effectY - 9, 9f)
                                 }
                                 Effect.Vibrato -> label("~", bx - 3, effectY - 3, 18f)
@@ -290,9 +290,9 @@ fun ScoreComposable(
                         val tip = if (direction == StrumDirection.Down) bottom else top
                         val tail = if (direction == StrumDirection.Down) top else bottom
                         val head = if (direction == StrumDirection.Down) -5f else 5f
-                        drawLine(style.accent, Offset(bx - 17, tail), Offset(bx - 17, tip), 1.4f)
-                        drawLine(style.accent, Offset(bx - 21, tip + head), Offset(bx - 17, tip), 1.4f)
-                        drawLine(style.accent, Offset(bx - 13, tip + head), Offset(bx - 17, tip), 1.4f)
+                        drawLine(style.accent, Offset(bx - 24, tail), Offset(bx - 24, tip), 1.4f)
+                        drawLine(style.accent, Offset(bx - 28, tip + head), Offset(bx - 24, tip), 1.4f)
+                        drawLine(style.accent, Offset(bx - 20, tip + head), Offset(bx - 24, tip), 1.4f)
                     }
                     if (tabRhythm && beat.notes.isNotEmpty()) {
                         drawOval(style.ink, Offset(bx - 4, rhythmY - 3), Size(8f, 6f),
