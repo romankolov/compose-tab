@@ -70,6 +70,9 @@ class AndroidPlayerTest {
             device.findObject(UiSelector().text("Settings")).click()
             val source = device.findObject(UiSelector().textContains("original-study.gp4"))
             assertTrue("Imported file must replace the bundled source", source.waitForExists(5_000))
+            val notation = device.findObject(UiSelector().text("Notation"))
+            assertTrue("Notation toggle must be available in Settings", notation.waitForExists(5_000))
+            notation.click() // Exercise the actual tab-only, headless-beam view.
             device.pressBack()
             val play = device.findObject(UiSelector().text("Play"))
             assertTrue(play.waitForExists(10_000)); play.click()
