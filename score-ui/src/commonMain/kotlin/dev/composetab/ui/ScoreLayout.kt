@@ -12,7 +12,7 @@ internal data class BeamSegment(val from: Float, val to: Float, val level: Int)
 internal data class PlacedMeasure(
     val track: Track, val measure: Measure, val x: Float, val y: Float,
     val beats: List<PlacedBeat>, val width: Float, val beamY: Float,
-    val beams: List<BeamSegment>, val targets: List<NoteTarget>, val startsSystem: Boolean = false, val tabOffset: Float = 110f,
+    val beams: List<BeamSegment>, val targets: List<NoteTarget>, val startsSystem: Boolean = false, val tabOffset: Float = 110f, val ties: List<TieSegment> = emptyList(),
 )
 internal data class ScoreLayout(
     val rows: List<List<PlacedMeasure>>, val width: Float, val height: Float, val rowHeight: Float,
@@ -45,18 +45,19 @@ internal data class ScoreLayout(
 /** Conventional simple-meter beats or compound-meter dotted beats. Explicit custom beam
  * grouping (e.g. asymmetric 7/8) can replace this policy without changing rendering. */
 internal fun beamSegments(beats: List<PlacedBeat>, time: TimeSignature): List<BeamSegment> {
+    val rhythm = beats.filter { it.beat.grace == null }
     val groupLength = if (time.denominator == 8 && time.numerator > 3 && time.numerator % 3 == 0) 1.5f
         else 4f / time.denominator
-    fun levels(b: PlacedBeat): Int = if (b.beat.isRest) 0 else when (b.beat.duration) {
+    fun levels(b: PlacedBeat): Int = if (b.beat.isRest || b.beat.grace != null) 0 else when (b.beat.duration) {
         Duration.Eighth -> 1; Duration.Sixteenth -> 2; Duration.ThirtySecond -> 3; else -> 0
     }
     fun connected(a: PlacedBeat, b: PlacedBeat, level: Int): Boolean =
         levels(a) > level && levels(b) > level && floor((a.onset + .0001f) / groupLength) == floor((b.onset + .0001f) / groupLength)
     return buildList {
-        beats.forEachIndexed { index, beat ->
+        rhythm.forEachIndexed { index, beat ->
             repeat(levels(beat)) { level ->
-                val next = beats.getOrNull(index + 1)
-                val previous = beats.getOrNull(index - 1)
+                val next = rhythm.getOrNull(index + 1)
+                val previous = rhythm.getOrNull(index - 1)
                 when {
                     next != null && connected(beat, next, level) -> add(BeamSegment(beat.x + 4, next.x + 4, level))
                     previous != null && connected(previous, beat, level) -> Unit // Already connected from the left.
@@ -117,25 +118,32 @@ internal fun layoutScore(data: ScoreData, style: ScoreStyle, viewportWidth: Floa
             var elapsed = 0f
             val onsets = measure.beats.map { beat ->
                 val start = beat.offsetQuarters?.toFloat() ?: elapsed
-                elapsed = maxOf(elapsed, start + beat.durationQuarters)
+                if (beat.grace == null) elapsed = maxOf(elapsed, start + beat.metricalDurationQuarters)
                 start
             }
             val total = maxOf(elapsed, measure.lengthQuarters?.toFloat() ?: 0f, 1f)
             val distinctOnsets = onsets.distinct().sorted()
-            val spacing = minOf(32f, (width - 80f) / distinctOnsets.size.coerceAtLeast(1))
-            val extraSpace = (width - 80f - distinctOnsets.size * spacing).coerceAtLeast(0f)
+            val graceGroups = measure.beats.indices.filter { measure.beats[it].grace != null }
+                .groupBy { onsets[it] to measure.beats[it].voice }
+            val graceInset = (graceGroups.values.maxOfOrNull { it.size } ?: 0) * 16f
+            val spacing = minOf(32f, (width - 80f - graceInset).coerceAtLeast(8f) / distinctOnsets.size.coerceAtLeast(1))
+            val extraSpace = (width - 80f - graceInset - distinctOnsets.size * spacing).coerceAtLeast(0f)
             val beats = measure.beats.mapIndexed { beatIndex, beat ->
                 val onset = onsets[beatIndex]
-                val bx = x + 54f + distinctOnsets.binarySearch(onset) * spacing + onset / total * extraSpace
+                val ornaments = graceGroups[onset to beat.voice].orEmpty()
+                val graceShift = if (beat.grace != null) (ornaments.size - ornaments.indexOf(beatIndex)) * 16f else 0f
+                val bx = x + 54f + graceInset + distinctOnsets.binarySearch(onset) * spacing + onset / total * extraSpace - graceShift
                 beat.notes.forEach { note ->
                     require(note.string <= track.tuning.size) { "Note ${note.id} uses a string outside track tuning" }
                     fun target(ny: Float, tab: Boolean, rhythm: Boolean = false) {
-                        targets += NoteTarget(Rect(Offset(bx - 13, ny - 11), Offset(bx + 13, ny + 11)),
+                        val halfWidth = if (beat.grace != null) 7f else 13f
+                        val halfHeight = if (beat.grace != null) 7f else 11f
+                        targets += NoteTarget(Rect(Offset(bx - halfWidth, ny - halfHeight), Offset(bx + halfWidth, ny + halfHeight)),
                             ScoreEvent.NoteSelected(track.id, measure.id, beat.id, note.id, tab), rhythm)
                     }
                     if (style.showStaff) target(y + 4 * style.lineSpacing - note.staffStep * style.lineSpacing / 2, false)
                     if (style.showTab) target(y + tabOffset + (note.string - 1) * style.tabStringSpacing, true)
-                    if (style.showTab && !style.showStaff && style.showTabRhythm)
+                    if (style.showTab && !style.showStaff && style.showTabRhythm && beat.grace == null)
                         target(y + (track.tuning.size - 1) * style.tabStringSpacing + 50f, true, rhythm = true)
                 }
                 PlacedBeat(beat, bx, onset)
@@ -145,6 +153,7 @@ internal fun layoutScore(data: ScoreData, style: ScoreStyle, viewportWidth: Floa
             PlacedMeasure(track, measure, x, y, beats, width, beamY, beamSegments(beats, measure.time), targets, x == 32f, tabOffset)
         }
     } }
+    val tiedRows = withTies(rows, style)
     val contentWidth = rows.maxOfOrNull { row -> row.maxOfOrNull { it.x + it.width + 32f } ?: 64f } ?: 64f
-    return ScoreLayout(rows, contentWidth, maxOf(80f, 40f + systemCount * data.tracks.size * rowHeight), rowHeight)
+    return ScoreLayout(tiedRows, contentWidth, maxOf(80f, 40f + systemCount * data.tracks.size * rowHeight), rowHeight)
 }

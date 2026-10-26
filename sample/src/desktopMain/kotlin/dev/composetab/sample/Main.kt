@@ -1,6 +1,9 @@
 package dev.composetab.sample
 
 import androidx.compose.runtime.*
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.ui.Modifier
+import dev.composetab.ui.*
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
@@ -20,7 +23,11 @@ fun main(args: Array<String>) = application {
     val view = args.firstOrNull { it.startsWith("--view=") }?.substringAfter('=') ?: "both"
     Window(onCloseRequest = ::exitApplication, title = "Compose Tab · Score Studio",
         state = rememberWindowState(width = 1120.dp, height = 800.dp)) {
-        App(initialView = view, services = services, onLoaded = { loaded = it })
+        if ("--ornaments" in args) {
+            val state = remember { ScoreState(ornamentStudy()).apply { followPlayback = false } }
+            ScoreComposable(state, Modifier.fillMaxSize(), ScoreStyle(showStaff = view != "tab", layoutMode = ScoreLayoutMode.Vertical))
+            LaunchedEffect(Unit) { loaded = Result.success(Unit) }
+        } else App(initialView = view, services = services, onLoaded = { loaded = it })
         if (screenshot != null && loaded != null) LaunchedEffect(screenshot, loaded) {
             loaded?.exceptionOrNull()?.let { System.err.println(it.stackTraceToString()); kotlin.system.exitProcess(2) }
             delay(1800) // Let font loading, first layout and spring animations settle.

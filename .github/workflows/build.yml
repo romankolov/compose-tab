@@ -15,6 +15,7 @@ jobs:
     timeout-minutes: 30
     env:
       COMPOSE_TAB_SILENT: '1'
+      COMPOSE_TAB_JSON_SAMPLES: /tmp/compose-tab-json-contracts
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-java@v5
@@ -26,11 +27,28 @@ jobs:
           if ! python3 sample/tools/prepare_gp4.py --fetch; then
             echo '::warning::External tab host unavailable; screenshots will show the clearly titled original study.'
           fi
+      - name: Fetch complete custom JSON contract samples
+        run: |
+          mkdir -p "$COMPOSE_TAB_JSON_SAMPLES"
+          curl --compressed --fail --location --retry 2 --max-time 60 'https://dqsljvtekg760.cloudfront.net/439/9821972/v0-3-2-ZFupge6YADvcqilc/3.json' -o "$COMPOSE_TAB_JSON_SAMPLES/track-1.json"
+          curl --compressed --fail --location --retry 2 --max-time 60 'https://dqsljvtekg760.cloudfront.net/523530/523926/v2-34-0-uILv-D-NdsCuc2xn/0.json' -o "$COMPOSE_TAB_JSON_SAMPLES/track-2.json"
+          python3 - <<'PYJSON'
+          import gzip, json, os
+          from pathlib import Path
+          for path in sorted(Path(os.environ['COMPOSE_TAB_JSON_SAMPLES']).glob('*.json')):
+              data = path.read_bytes()
+              if data.startswith(b'\x1f\x8b'):
+                  data = gzip.decompress(data)
+              text = data.decode('utf-8-sig')
+              payload = json.loads(text)
+              path.write_text(text, encoding='utf-8')
+              print(f'{path.name}: {len(data)} bytes, {len(payload["measures"])} measures, fields={sorted(payload)}')
+          PYJSON
       - uses: gradle/actions/setup-gradle@v4
       - name: Test libraries and assemble Android and Desktop
         run: |
           set -o pipefail
-          xvfb-run -a ./gradlew :score-model:desktopTest :score-ui:desktopTest :sample:desktopTest :sample:assembleDebug :sample:desktopJar :sample:createDistributable --console=plain 2>&1 | tee -a build-log.txt
+          xvfb-run -a ./gradlew :score-json:desktopTest :score-json:assembleDebug :score-model:desktopTest :score-ui:desktopTest :sample:desktopTest :sample:assembleDebug :sample:desktopJar :sample:createDistributable --console=plain 2>&1 | tee -a build-log.txt
       - name: Capture real desktop windows
         run: |
           mkdir -p docs/screenshots
@@ -42,6 +60,11 @@ jobs:
       - name: Capture tab articulation exercise
         run: |
           timeout 120s xvfb-run -a -s '-screen 0 1280x900x24' ./gradlew :sample:run --args="--screenshot=$PWD/docs/screenshots/effects.png --view=tab --gp4=$PWD/sample/src/desktopTest/resources/fixtures/effects.gp5"
+      - name: Capture tie and grace engraving
+        run: |
+          for view in both tab; do
+            timeout 120s xvfb-run -a -s '-screen 0 1280x900x24' ./gradlew :sample:run --args="--ornaments --screenshot=$PWD/docs/screenshots/ornaments-$view.png --view=$view"
+          done
       - name: Smoke-test packaged app and archive executable permissions
         run: |
           GP4_ARG=""
@@ -163,7 +186,7 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
       - run: |
           set -o pipefail
-          ./gradlew :sample:linkDebugFrameworkIosSimulatorArm64 --console=plain 2>&1 | tee -a build-log.txt
+          ./gradlew :score-json:compileKotlinIosSimulatorArm64 :sample:linkDebugFrameworkIosSimulatorArm64 --console=plain 2>&1 | tee -a build-log.txt
       - uses: actions/upload-artifact@v4
         with:
           name: ios-simulator-framework

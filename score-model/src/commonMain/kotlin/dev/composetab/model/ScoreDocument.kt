@@ -77,7 +77,8 @@ class ScoreTimeline(moments: List<ScoreMoment>) {
             var measureStart = 0.0
             track.measures.flatMap { measure ->
                 var beatStart = 0.0
-                val moments = measure.beats.map { beat ->
+                val moments = measure.beats.mapNotNull { beat ->
+                    if (beat.grace != null) return@mapNotNull null
                     val onset = beat.offsetQuarters ?: beatStart
                     beatStart = maxOf(beatStart, onset + beat.durationQuarters)
                     ScoreMoment(track.id, measure.id, beat.id, measureStart + onset, beat.durationQuarters.toDouble(), beat.notes.map { it.id }.toSet())
