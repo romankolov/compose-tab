@@ -10,7 +10,7 @@ data class TabWarning(val path: String, val message: String)
 data class TabSourceLocation(val measure: Int, val voice: Int? = null, val beat: Int? = null, val note: Int? = null)
 data class TabScoreResult(
     val score: ScoreData, val document: TabDocument, val warnings: List<TabWarning>,
-    /** Stable renderer ID -> zero-based source indices (for clicks, selection and metadata). */
+    /** Stable measure/beat/note renderer ID -> zero-based source indices (for clicks, selection and metadata). */
     val locations: Map<String, TabSourceLocation>,
 )
 
@@ -26,6 +26,17 @@ object TabScoreAdapter {
             val mp = "$.measures[$mi]"
             locations[mid] = TabSourceLocation(mi)
             val beats = m.voices.flatMapIndexed { vi, v ->
+                // One backwards pass avoids repeatedly copying/scanning long voices for H/P.
+                val hpTargets = mutableMapOf<Pair<Int, Int>, Int>()
+                val followingFrets = mutableMapOf<Int, Int>()
+                val enabled = JsonPrimitive(true)
+                for (index in v.beats.indices.reversed()) {
+                    val notes = v.beats[index].notes
+                    notes.forEach { n ->
+                        if (n.source["hp"] == enabled) followingFrets[n.string]?.let { hpTargets[index to n.string] = it }
+                    }
+                    notes.forEach { followingFrets[it.string] = it.fret }
+                }
                 var offset = 0.0
                 v.beats.mapIndexedNotNull { bi, b ->
                     val bp = "$mp.voices[$vi].beats[$bi]"
@@ -46,8 +57,8 @@ object TabScoreAdapter {
                         flag("vibrato", Effect.Vibrato); flag("palmMute", Effect.PalmMute)
                         if (b.source.flag("palmMute", bp) && Effect.PalmMute !in effects) effects += Effect.PalmMute
                         if (n.source.flag("hp", np)) {
-                            val next = v.beats.drop(bi + 1).firstNotNullOfOrNull { next -> next.notes.firstOrNull { it.string == n.string } }
-                            if (next != null) effects += if (next.fret >= n.fret) Effect.HammerOn else Effect.PullOff
+                            val nextFret = hpTargets[bi to n.string]
+                            if (nextFret != null) effects += if (nextFret >= n.fret) Effect.HammerOn else Effect.PullOff
                             else warnings += TabWarning(np, "H/P has no following same-string target")
                         }
                         n.source["harmonic"]?.let { harmonic ->
