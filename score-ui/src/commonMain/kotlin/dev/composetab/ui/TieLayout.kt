@@ -24,7 +24,7 @@ internal fun withTies(rows: List<List<PlacedMeasure>>, style: ScoreStyle): List<
                     fun ny(n: Note): Float = if (tab) startMeasure.y + startMeasure.tabOffset + (n.string - 1) * style.tabStringSpacing + 8f
                         else startMeasure.y + 4 * style.lineSpacing - n.staffStep * style.lineSpacing / 2 + 6f
                     fun pad(n: Note) = if (tab) tabFretLabel(n).length * 3.5f + 2 else 7f
-                    val left = if (group.first() == first) source.beat.x + pad(source.note) else startMeasure.x + 24f
+                    val left = if (group.first() == first) source.beat.x + pad(source.note) else startMeasure.x + if (tab) 36f else 24f
                     val right = if (group.last() == last) target.beat.x - pad(target.note) else endMeasure.x + endMeasure.width - 3f
                     if (right > left) {
                         val segment = TieSegment(Offset(left, ny(source.note)), Offset(right, ny(target.note)))

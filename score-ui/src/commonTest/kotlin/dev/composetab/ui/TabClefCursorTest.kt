@@ -14,6 +14,18 @@ class TabClefCursorTest {
             assertTrue(clef.centerX - clef.fontSize / 2 > 32f + 3 + 6 + 1.8f)
         }
     }
+    @Test fun incomingWrappedTabTieClearsLetterLane() {
+        val first = Note("a", 64, 1, 0, 7)
+        val score = ScoreData("Wrapped", tracks = listOf(Track("t", "Guitar", measures = listOf(
+            Measure("m0", 1, beats = listOf(Beat("b0", Duration.Whole, notes = listOf(first)))),
+            Measure("m1", 2, beats = listOf(Beat("b1", Duration.Whole, notes = listOf(first.copy(id = "b", tieFrom = "a")))))
+        ))))
+        val style = ScoreStyle(showStaff = false, layoutMode = ScoreLayoutMode.Vertical)
+        val m = layoutScore(score, style, 350f).measures.last()
+        val clef = tabClefLayout(m.x, m.y, m.track.tuning.size, style.tabStringSpacing)
+        assertTrue(m.startsSystem)
+        assertTrue(m.ties.single().from.x > clef.centerX + clef.fontSize / 2)
+    }
     private fun placed(style: ScoreStyle): PlacedMeasure {
         val data = ScoreData("Cursor", tracks = listOf(Track("t", "Guitar", measures = listOf(Measure("m", 1, beats = listOf(
             Beat("b", notes = listOf(Note("n", 76, 1, 12, 14), Note("low", 52, 6, 12, 0))),

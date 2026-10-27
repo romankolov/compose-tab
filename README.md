@@ -310,7 +310,7 @@ The optional JSON adapter maps `tie` and `graceNote` into these decoder-independ
 
 ### Vertical TAB clef and hollow capsule cursor
 
-The TAB label uses stacked uppercase letters spanning the strings, centered on the tab height.
+The TAB clef uses stacked uppercase letters spanning the strings, centered on the tab height at each system start.
 Its dedicated inset lane clears start-repeat bars/dots at every custom string spacing.
 Choose **More → Settings → Cursor → Capsule** in the sample, or configure:
 

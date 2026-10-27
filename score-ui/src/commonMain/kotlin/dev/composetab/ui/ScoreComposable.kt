@@ -209,7 +209,7 @@ fun ScoreComposable(
                 if (style.showTab) {
                     lines(tabY, track.tuning.size, tabGap)
                     val clef = tabClefLayout(x, tabY, track.tuning.size, tabGap)
-                    "TAB".forEachIndexed { index, letter ->
+                    if (placed.startsSystem) "TAB".forEachIndexed { index, letter ->
                         val glyph = text.measure(letter.toString(), TextStyle(color = style.muted,
                             fontSize = (clef.fontSize / (density * fontScale)).sp))
                         val origin = Offset(clef.centerX - glyph.size.width / 2f, clef.centersY[index] - glyph.size.height / 2f)
