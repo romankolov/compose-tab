@@ -79,8 +79,11 @@ fun DrawScope.drawScoreHighlight(highlight: ScoreHighlight) {
     val b = highlight.bounds
     when (highlight.style.shape) {
         HighlightShape.None -> Unit
-        HighlightShape.Capsule -> drawRoundRect(highlight.style.color, b.topLeft, b.size,
-            CornerRadius(b.width / 2, b.height / 2), style = Stroke(highlight.style.lineWidth))
+        HighlightShape.Capsule -> {
+            val radius = minOf(b.width, b.height) / 2
+            drawRoundRect(highlight.style.color, b.topLeft, b.size,
+                CornerRadius(radius, radius), style = Stroke(highlight.style.lineWidth))
+        }
         HighlightShape.VerticalLine -> drawLine(highlight.style.color, Offset(b.center.x, b.top), Offset(b.center.x, b.bottom), highlight.style.lineWidth)
         HighlightShape.NoteHead -> if (highlight.tablature) drawRoundRect(highlight.style.color, b.topLeft, b.size, CornerRadius(4f))
             else drawOval(highlight.style.color, b.topLeft, b.size)

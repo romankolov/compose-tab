@@ -28,5 +28,7 @@ class CapsuleRenderTest {
         val pixels = compose.onNodeWithTag("capsule").captureToImage().toPixelMap()
         assertEquals(Color.White, pixels[70, 100], "Capsule interior must remain hollow")
         assertTrue(pixels[50, 100].red > .9f && pixels[50, 100].green < .1f)
+        assertTrue(pixels[50, 50].red > .9f && pixels[50, 50].green < .1f,
+            "A capsule has straight sides and semicircular ends, not an elliptical outline")
     }
 }
