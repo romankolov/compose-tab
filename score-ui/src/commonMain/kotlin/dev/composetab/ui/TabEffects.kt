@@ -34,3 +34,13 @@ internal fun harmonicCaption(notes: List<Note>): String = notes.flatMap { it.eff
         HarmonicKind.Pinch -> "P.H."
         HarmonicKind.Semi -> "S.H."
     } }.distinct().joinToString(" / ")
+
+/** Dedicated clef lane: start-repeat dots occupy x+9; letters stay at x+24. */
+internal data class TabClefLayout(val centerX: Float, val centersY: List<Float>, val fontSize: Float)
+internal fun tabClefLayout(x: Float, top: Float, strings: Int, spacing: Float): TabClefLayout {
+    val stringHeight = (strings - 1).coerceAtLeast(0) * spacing
+    val height = stringHeight.coerceAtLeast(30f)
+    val center = top + stringHeight / 2
+    val font = minOf(14f, height / 3)
+    return TabClefLayout(x + 24f, listOf(center - height / 2 + font / 2, center, center + height / 2 - font / 2), font)
+}
