@@ -65,6 +65,9 @@ jobs:
           for view in both tab; do
             timeout 120s xvfb-run -a -s '-screen 0 1280x900x24' ./gradlew :sample:run --args="--ornaments --screenshot=$PWD/docs/screenshots/ornaments-$view.png --view=$view"
           done
+      - name: Capture vertical TAB, repeat signs and hollow capsule cursor
+        run: |
+          timeout 120s xvfb-run -a -s '-screen 0 1280x900x24' ./gradlew :sample:run --args="--capsule --screenshot=$PWD/docs/screenshots/capsule.png --view=tab"
       - name: Smoke-test packaged app and archive executable permissions
         run: |
           GP4_ARG=""

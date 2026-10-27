@@ -11,7 +11,7 @@ sealed interface ScoreEvent {
 }
 
 enum class ScoreLayoutMode { Horizontal, Vertical }
-enum class HighlightShape { None, NoteHead, Rectangle, VerticalLine, BeatColumn }
+enum class HighlightShape { None, NoteHead, Rectangle, VerticalLine, BeatColumn, Capsule }
 enum class HighlightKind { Selection, Playing, Playhead }
 
 /** Widths/padding are logical score-space dp, and scale with zoom. */

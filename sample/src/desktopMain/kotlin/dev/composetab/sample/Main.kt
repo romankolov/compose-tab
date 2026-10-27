@@ -23,9 +23,19 @@ fun main(args: Array<String>) = application {
     val view = args.firstOrNull { it.startsWith("--view=") }?.substringAfter('=') ?: "both"
     Window(onCloseRequest = ::exitApplication, title = "Compose Tab · Score Studio",
         state = rememberWindowState(width = 1120.dp, height = 800.dp)) {
-        if ("--ornaments" in args) {
-            val state = remember { ScoreState(ornamentStudy()).apply { followPlayback = false } }
-            ScoreComposable(state, Modifier.fillMaxSize(), ScoreStyle(showStaff = view != "tab", layoutMode = ScoreLayoutMode.Vertical))
+        if ("--ornaments" in args || "--capsule" in args) {
+            val capsule = "--capsule" in args
+            val state = remember {
+                val study = ornamentStudy()
+                val data = if (capsule) study.copy(tracks = study.tracks.map { t -> t.copy(measures = t.measures.mapIndexed { i, m ->
+                    if (i == 0) m.copy(repeatStart = true, repeatEnd = true) else m
+                }) }) else study
+                ScoreState(data).apply { followPlayback = false; if (capsule) setPlaybackQuarter(1.25) }
+            }
+            ScoreComposable(state, Modifier.fillMaxSize(), ScoreStyle(showStaff = view != "tab", layoutMode = ScoreLayoutMode.Vertical,
+                playingHighlight = ScoreHighlightStyle(if (capsule) HighlightShape.None else HighlightShape.NoteHead),
+                playhead = ScoreHighlightStyle(if (capsule) HighlightShape.Capsule else HighlightShape.VerticalLine,
+                    androidx.compose.ui.graphics.Color(0xFF2482B0), 2f)))
             LaunchedEffect(Unit) { loaded = Result.success(Unit) }
         } else App(initialView = view, services = services, onLoaded = { loaded = it })
         if (screenshot != null && loaded != null) LaunchedEffect(screenshot, loaded) {

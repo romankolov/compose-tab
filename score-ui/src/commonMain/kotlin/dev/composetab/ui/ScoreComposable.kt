@@ -206,7 +206,17 @@ fun ScoreComposable(
                     label("${measure.time.numerator}", x + 14, y + 1, 17f)
                     label("${measure.time.denominator}", x + 14, y + 20, 17f)
                 }
-                if (style.showTab) { lines(tabY, track.tuning.size, tabGap); label("TAB", x + 4, tabY + 17, 10f, true) }
+                if (style.showTab) {
+                    lines(tabY, track.tuning.size, tabGap)
+                    val clef = tabClefLayout(x, tabY, track.tuning.size, tabGap)
+                    "TAB".forEachIndexed { index, letter ->
+                        val glyph = text.measure(letter.toString(), TextStyle(color = style.muted,
+                            fontSize = (clef.fontSize / (density * fontScale)).sp))
+                        val origin = Offset(clef.centerX - glyph.size.width / 2f, clef.centersY[index] - glyph.size.height / 2f)
+                        drawRect(style.paper, origin - Offset(1f, 0f), Size(glyph.size.width + 2f, glyph.size.height.toFloat()))
+                        drawText(glyph, topLeft = origin)
+                    }
+                }
                 fun drawRepeat(rx: Float, start: Boolean, span: RepeatSpan) {
                     drawLine(style.ink, Offset(rx, span.top), Offset(rx, span.bottom), 2.5f)
                     listOf(span.upperDot, span.lowerDot).forEach { dotY ->

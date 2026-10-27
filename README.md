@@ -307,3 +307,18 @@ for small, individually selectable ornaments. `metricalDurationQuarters` is zero
 grace beats; their nominal `durationQuarters` still controls engraving. The default
 `ScoreTimeline` excludes grace beats; hosts can supply an explicit performance timeline.
 The optional JSON adapter maps `tie` and `graceNote` into these decoder-independent fields.
+
+### Vertical TAB clef and hollow capsule cursor
+
+The TAB label uses stacked uppercase letters spanning the strings, centered on the tab height.
+Its dedicated inset lane clears start-repeat bars/dots at every custom string spacing.
+Choose **More → Settings → Cursor → Capsule** in the sample, or configure:
+
+```kotlin
+ScoreStyle(playhead = ScoreHighlightStyle(HighlightShape.Capsule, color = Color(0xFF2482B0), lineWidth = 2f))
+```
+
+The capsule is an outline only. It encloses the active beat's notes/chord across the visible
+staves and stays on that beat during sustain (the existing line cursor still interpolates).
+It works with beat positions or just playing note IDs. Existing filled playing highlights are
+independent; use `playingHighlight = ScoreHighlightStyle(HighlightShape.None)` for outline only.
